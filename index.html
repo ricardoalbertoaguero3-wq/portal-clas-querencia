@@ -666,10 +666,13 @@
     currentPdf.getPage(num).then(function(page){
       var unscaled = page.getViewport({ scale: 1 });
       var maxWidth = Math.min(viewerBody.clientWidth - 48, 1000);
-      var scale = Math.min(maxWidth / unscaled.width, 2.5);
+            var dpr = window.devicePixelRatio || 1;
+      var scale = Math.min(maxWidth / unscaled.width, 2.5) * dpr;
       var viewport = page.getViewport({ scale: scale });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      canvas.style.width = (viewport.width / dpr) + 'px';
+      canvas.style.height = (viewport.height / dpr) + 'px';
       page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function(){
         drawWatermark();
         pageIndicator.textContent = num + " / " + currentPdf.numPages;

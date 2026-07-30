@@ -469,7 +469,7 @@
         nombre: "Administrativo",
         docs: [
           { titulo:"Plan de Mantenimiento Preventivo y Correctivo", descripcion:"Equipos informáticos y biomédicos del CLAS.", periodo:"2026", file:"docs/plan-mantenimiento-2026.pdf" },
-          { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf" },
+          { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf", native:true },
           { titulo:"Informe de Situación Institucional", descripcion:"Informe de situación institucional del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/INFORME_SITUACION_INSTITUCIONAL_CLAS_LA_QUERENCIA_2025_COMPLETA TERMINADA.pdf" }
         ]
       },
@@ -618,7 +618,7 @@
   var currentPage = 1;
 
   function openViewer(doc){
-    if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+    if(doc.native || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
       window.open(doc.file,'_blank'); return;
     }    
     viewerTitle.textContent = doc.titulo;

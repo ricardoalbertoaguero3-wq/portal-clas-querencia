@@ -618,6 +618,9 @@
   var currentPage = 1;
 
   function openViewer(doc){
+    if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+      window.open(doc.file,'_blank'); return;
+    }    
     viewerTitle.textContent = doc.titulo;
     canvas.style.display = "none";
     viewerLoading.style.display = "block";

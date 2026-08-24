@@ -226,6 +226,148 @@
   }
   .doc-open{ font-size:13px; color:#7a5a1d; font-weight:600; }
 
+  /* ---------- Importación de archivos ---------- */
+  .btn-import{
+    margin-left:auto;
+    background:transparent;
+    border:1.5px dashed var(--gold);
+    color:var(--gold);
+    padding:5px 13px;
+    border-radius:20px;
+    font-family:'Lora',serif;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s,color .15s,border-style .15s;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .btn-import:hover{ background:var(--gold); color:#fff; border-style:solid; }
+
+  .tag-local{
+    font-size:10.5px;
+    font-family:'Lora',serif;
+    font-weight:600;
+    background:#dbeafe;
+    color:#1e4da1;
+    padding:2px 8px;
+    border-radius:20px;
+  }
+  .doc-del{
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:15px;
+    cursor:pointer;
+    padding:2px 5px;
+    line-height:1;
+    opacity:.45;
+    transition:opacity .12s,color .12s;
+    flex-shrink:0;
+  }
+  .doc-del:hover{ color:var(--danger); opacity:1; }
+
+  .sort-notice{
+    font-size:11.5px;
+    color:var(--muted);
+    margin:0 0 8px;
+    text-align:right;
+    font-style:italic;
+  }
+
+  /* ---------- Modal de importación ---------- */
+  #importModal{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:200;
+    background:rgba(0,0,0,0.55);
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  #importModal.open{ display:flex; }
+  .import-card{
+    background:var(--paper-card);
+    border-radius:14px;
+    padding:32px 36px;
+    max-width:480px;
+    width:100%;
+    box-shadow:0 18px 50px rgba(0,0,0,0.3);
+  }
+  .import-card h3{
+    font-family:'Cormorant Garamond',Georgia,serif;
+    font-size:22px;
+    margin:0 0 4px;
+    color:var(--ink);
+  }
+  .import-cat-label{
+    font-size:13px;
+    color:var(--muted);
+    margin:0 0 22px;
+    font-style:italic;
+  }
+  .import-field{ margin-bottom:14px; }
+  .import-field label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--muted);
+    letter-spacing:0.35px;
+    margin-bottom:5px;
+    text-transform:uppercase;
+  }
+  .import-field input{
+    width:100%;
+    padding:10px 12px;
+    font-family:'Lora',serif;
+    font-size:14px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    outline:none;
+    background:var(--paper);
+    color:var(--text);
+  }
+  .import-field input:focus{ border-color:var(--gold); }
+  .import-file-name{
+    font-size:13px;
+    color:var(--muted);
+    padding:8px 0 0;
+    word-break:break-all;
+    min-height:24px;
+  }
+  .import-actions{
+    display:flex;
+    gap:10px;
+    margin-top:24px;
+  }
+  .btn-primary{
+    flex:1;
+    padding:11px 0;
+    background:var(--ink);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    font-family:'Lora',serif;
+    font-size:14.5px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .btn-primary:hover{ background:var(--gold); color:var(--ink); }
+  .btn-primary:disabled{ opacity:.45; cursor:default; }
+  .btn-secondary{
+    padding:11px 20px;
+    background:transparent;
+    color:var(--muted);
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-family:'Lora',serif;
+    font-size:14.5px;
+    cursor:pointer;
+  }
+  .btn-secondary:hover{ border-color:var(--muted); }
+
   .jefes-grid{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(230px,1fr));
@@ -435,7 +577,36 @@
   </div>
 
   <!-- ============ VISOR MODAL ============ -->
-  <div id="viewerOverlay">
+  <!-- Modal de importación local de archivos -->
+<div id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+  <div class="import-card">
+    <h3 id="importModalTitle">Importar documento</h3>
+    <p class="import-cat-label" id="importCatLabel"></p>
+    <input type="file" id="importFileInput" accept=".pdf" style="display:none" aria-hidden="true">
+    <div class="import-field">
+      <label>Archivo seleccionado</label>
+      <div class="import-file-name" id="importFileName">Ningún archivo seleccionado</div>
+    </div>
+    <div class="import-field">
+      <label for="importTitulo">Título del documento</label>
+      <input type="text" id="importTitulo" placeholder="Ej: Plan Operativo 2026" maxlength="120">
+    </div>
+    <div class="import-field">
+      <label for="importDesc">Descripción <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
+      <input type="text" id="importDesc" placeholder="Breve descripción del contenido" maxlength="200">
+    </div>
+    <div class="import-field">
+      <label for="importPeriodo">Período</label>
+      <input type="text" id="importPeriodo" placeholder="Ej: 2026" maxlength="20">
+    </div>
+    <div class="import-actions">
+      <button class="btn-secondary" id="importCancel" type="button">Cancelar</button>
+      <button class="btn-primary" id="importSave" type="button" disabled>Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewerOverlay">
     <div class="viewer-bar">
       <div class="vtitle" id="viewerTitle">Documento</div>
       <div class="viewer-nav">
@@ -553,43 +724,171 @@
     showLock();
   });
 
+  /* ---- IndexedDB para importaciones locales ---- */
+  var importDB = null;
+  var importPendingCat = null;
+  var importPendingFile = null;
+
+  function initImportDB(cb){
+    try{
+      var req = indexedDB.open("claqImports", 1);
+      req.onupgradeneeded = function(e){
+        var s = e.target.result.createObjectStore("docs",{keyPath:"id",autoIncrement:true});
+        s.createIndex("catNombre","catNombre",{unique:false});
+      };
+      req.onsuccess = function(e){ importDB = e.target.result; cb(); };
+      req.onerror = function(){ cb(); };
+    }catch(e){ cb(); }
+  }
+
+  function saveImportDoc(catNombre, titulo, desc, periodo, buf, cb){
+    if(!importDB){ cb(null); return; }
+    var tx = importDB.transaction("docs","readwrite");
+    var req = tx.objectStore("docs").add({
+      catNombre:catNombre, titulo:titulo, descripcion:desc,
+      periodo:periodo, data:buf, addedAt:Date.now()
+    });
+    req.onsuccess = function(e){ cb(e.target.result); };
+    req.onerror = function(){ cb(null); };
+  }
+
+  function loadImportDocs(catNombre, cb){
+    if(!importDB){ cb([]); return; }
+    var tx = importDB.transaction("docs","readonly");
+    var req = tx.objectStore("docs").index("catNombre").getAll(catNombre);
+    req.onsuccess = function(e){ cb(e.target.result||[]); };
+    req.onerror = function(){ cb([]); };
+  }
+
+  function deleteImportDoc(id, cb){
+    if(!importDB){ cb(); return; }
+    var tx = importDB.transaction("docs","readwrite");
+    var req = tx.objectStore("docs").delete(id);
+    req.onsuccess = cb;
+    req.onerror = cb;
+  }
+
   function renderCategorias(){
+    if(!importDB){ renderCategoriasSync({}); return; }
+    var pending = DATA.categorias.length;
+    if(pending === 0){ renderCategoriasSync({}); return; }
+    var importedByCat = {};
+    DATA.categorias.forEach(function(cat){
+      loadImportDocs(cat.nombre, function(docs){
+        importedByCat[cat.nombre] = docs;
+        pending--;
+        if(pending === 0){ renderCategoriasSync(importedByCat); }
+      });
+    });
+  }
+
+  function renderCategoriasSync(importedByCat){
     var root = document.getElementById("categorias");
     root.innerHTML = "";
     DATA.categorias.forEach(function(cat){
-      if(!cat.docs.length) return;
+      var imported = (importedByCat[cat.nombre]||[]).map(function(imp){
+        return { titulo:imp.titulo, descripcion:imp.descripcion||"",
+                 periodo:imp.periodo||"", _local:true, _id:imp.id, _data:imp.data };
+      });
+
+      var allDocs = cat.docs.concat(imported);
+
+      // Ordenar alfabéticamente cuando hay archivos locales agregados
+      if(imported.length > 0){
+        allDocs.sort(function(a,b){
+          return (a.titulo||"").localeCompare(b.titulo||"","es",{sensitivity:"base"});
+        });
+      }
+
       var wrap = document.createElement("div");
 
       var h = document.createElement("h2");
       h.className = "cat-title";
-      h.innerHTML = cat.nombre + ' <span class="tag-count">' + cat.docs.length + ' doc.</span>';
+      var nameNode = document.createTextNode(cat.nombre + " ");
+      var countBadge = document.createElement("span");
+      countBadge.className = "tag-count";
+      countBadge.textContent = allDocs.length + " doc.";
+      var importBtn = document.createElement("button");
+      importBtn.className = "btn-import";
+      importBtn.type = "button";
+      importBtn.textContent = "+ Importar";
+      (function(cn){ importBtn.addEventListener("click", function(){ openImportModal(cn); }); })(cat.nombre);
+      h.appendChild(nameNode);
+      h.appendChild(countBadge);
+      h.appendChild(importBtn);
       wrap.appendChild(h);
+
+      if(imported.length > 0){
+        var notice = document.createElement("p");
+        notice.className = "sort-notice";
+        notice.textContent = "Ordenado alfabéticamente · " + imported.length + " archivo(s) importado(s) localmente";
+        wrap.appendChild(notice);
+      }
 
       var card = document.createElement("div");
       card.className = "doc-card";
 
-      cat.docs.forEach(function(doc){
+      allDocs.forEach(function(doc){
         var row = document.createElement("button");
         row.className = "doc-row" + (doc.pending ? " pending" : "");
         row.type = "button";
         row.disabled = !!doc.pending;
-        row.innerHTML =
-          '<div class="doc-main">' +
-            '<div class="doc-title"></div>' +
-            '<div class="doc-desc"></div>' +
-          '</div>' +
-          '<div class="doc-side">' +
-            '<span class="tag-period"></span>' +
-            (doc.pending
-              ? '<span class="tag-pending">Pendiente de carga</span>'
-              : '<span class="doc-open">Ver documento →</span>') +
-          '</div>';
-        row.querySelector(".doc-title").textContent = doc.titulo;
-        row.querySelector(".doc-desc").textContent = doc.descripcion;
-        row.querySelector(".tag-period").textContent = doc.periodo;
-        if(!doc.pending){
-          row.addEventListener("click", function(){ openViewer(doc); });
+
+        var docMain = document.createElement("div");
+        docMain.className = "doc-main";
+        var docTitle = document.createElement("div");
+        docTitle.className = "doc-title";
+        docTitle.textContent = doc.titulo;
+        var docDesc = document.createElement("div");
+        docDesc.className = "doc-desc";
+        docDesc.textContent = doc.descripcion;
+        docMain.appendChild(docTitle);
+        docMain.appendChild(docDesc);
+
+        var docSide = document.createElement("div");
+        docSide.className = "doc-side";
+        var tagPeriod = document.createElement("span");
+        tagPeriod.className = "tag-period";
+        tagPeriod.textContent = doc.periodo;
+        docSide.appendChild(tagPeriod);
+
+        if(doc._local){
+          var tagLocal = document.createElement("span");
+          tagLocal.className = "tag-local";
+          tagLocal.textContent = "local";
+          docSide.appendChild(tagLocal);
+          var openLbl = document.createElement("span");
+          openLbl.className = "doc-open";
+          openLbl.textContent = "Ver documento →";
+          docSide.appendChild(openLbl);
+          var delBtn = document.createElement("button");
+          delBtn.className = "doc-del";
+          delBtn.type = "button";
+          delBtn.title = "Eliminar importación local";
+          delBtn.textContent = "✕";
+          (function(d){ delBtn.addEventListener("click", function(e){
+            e.stopPropagation();
+            if(confirm("¿Eliminar \"" + d.titulo + "\" de los archivos importados localmente?")){
+              deleteImportDoc(d._id, function(){ renderCategorias(); });
+            }
+          }); })(doc);
+          docSide.appendChild(delBtn);
+          (function(d){ row.addEventListener("click", function(){ openViewerLocal(d); }); })(doc);
+        } else if(doc.pending){
+          var tagPending = document.createElement("span");
+          tagPending.className = "tag-pending";
+          tagPending.textContent = "Pendiente de carga";
+          docSide.appendChild(tagPending);
+        } else {
+          var openLbl2 = document.createElement("span");
+          openLbl2.className = "doc-open";
+          openLbl2.textContent = "Ver documento →";
+          docSide.appendChild(openLbl2);
+          (function(d){ row.addEventListener("click", function(){ openViewer(d); }); })(doc);
         }
+
+        row.appendChild(docMain);
+        row.appendChild(docSide);
         card.appendChild(row);
       });
 
@@ -597,6 +896,72 @@
       root.appendChild(wrap);
     });
   }
+
+  /* ---- Modal de importación ---- */
+  var importModal = document.getElementById("importModal");
+  var importFileInput = document.getElementById("importFileInput");
+  var importCatLabel = document.getElementById("importCatLabel");
+  var importFileNameEl = document.getElementById("importFileName");
+  var importTituloEl = document.getElementById("importTitulo");
+  var importDescEl = document.getElementById("importDesc");
+  var importPeriodoEl = document.getElementById("importPeriodo");
+  var importSaveBtn = document.getElementById("importSave");
+  var importCancelBtn = document.getElementById("importCancel");
+
+  function openImportModal(catNombre){
+    importPendingCat = catNombre;
+    importPendingFile = null;
+    importCatLabel.textContent = "Sección: " + catNombre;
+    importFileNameEl.textContent = "Ningún archivo seleccionado";
+    importTituloEl.value = "";
+    importDescEl.value = "";
+    importPeriodoEl.value = String(new Date().getFullYear());
+    importSaveBtn.disabled = true;
+    importModal.classList.add("open");
+    importFileInput.value = "";
+    importFileInput.click();
+  }
+
+  function closeImportModal(){
+    importModal.classList.remove("open");
+    importPendingCat = null;
+    importPendingFile = null;
+  }
+
+  importFileInput.addEventListener("change", function(){
+    var file = this.files[0];
+    if(!file) return;
+    importPendingFile = file;
+    importFileNameEl.textContent = file.name;
+    if(!importTituloEl.value.trim()){
+      importTituloEl.value = file.name.replace(/\.pdf$/i,"").replace(/[-_]+/g," ").trim();
+    }
+    importSaveBtn.disabled = false;
+  });
+
+  importCancelBtn.addEventListener("click", closeImportModal);
+
+  importModal.addEventListener("click", function(e){
+    if(e.target === importModal){ closeImportModal(); }
+  });
+
+  importSaveBtn.addEventListener("click", function(){
+    if(!importPendingFile || !importPendingCat) return;
+    var titulo = importTituloEl.value.trim() || importPendingFile.name;
+    var desc = importDescEl.value.trim();
+    var periodo = importPeriodoEl.value.trim() || String(new Date().getFullYear());
+    importSaveBtn.disabled = true;
+    importSaveBtn.textContent = "Guardando…";
+    var reader = new FileReader();
+    reader.onload = function(e){
+      saveImportDoc(importPendingCat, titulo, desc, periodo, e.target.result, function(){
+        importSaveBtn.textContent = "Guardar";
+        closeImportModal();
+        renderCategorias();
+      });
+    };
+    reader.readAsArrayBuffer(importPendingFile);
+  });
 
   function renderJefes(){
     var grid = document.getElementById("jefesGrid");
@@ -689,6 +1054,34 @@
     if(currentPdf && currentPage < currentPdf.numPages){ currentPage++; renderPage(currentPage); }
   });
 
+  function openViewerLocal(doc){
+    if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+      var blob = new Blob([doc._data],{type:"application/pdf"});
+      var url = URL.createObjectURL(blob);
+      window.open(url,"_blank");
+      return;
+    }
+    viewerTitle.textContent = doc.titulo;
+    canvas.style.display = "none";
+    viewerLoading.style.display = "block";
+    viewerLoading.textContent = "Cargando documento…";
+    pageIndicator.textContent = "– / –";
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    overlay.classList.add("open");
+    document.body.style.overflow = "hidden";
+    pdfjsLib.getDocument({data: new Uint8Array(doc._data)}).promise.then(function(pdf){
+      currentPdf = pdf;
+      currentPage = 1;
+      viewerLoading.style.display = "none";
+      canvas.style.display = "block";
+      renderPage(currentPage);
+    }).catch(function(err){
+      viewerLoading.textContent = "No se pudo cargar el documento local.";
+      console.error(err);
+    });
+  }
+
   function closeViewer(){
     overlay.classList.remove("open");
     document.body.style.overflow = "";
@@ -722,9 +1115,11 @@
   });
 
   /* ---- Restaurar sesión si ya estaba desbloqueada ---- */
-  try{
-    if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
-  }catch(e){}
+  initImportDB(function(){
+    try{
+      if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
+    }catch(e){}
+  });
 
 })();
 </script>

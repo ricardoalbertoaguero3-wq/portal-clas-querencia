@@ -933,10 +933,20 @@
     if(!file) return;
     importPendingFile = file;
     importFileNameEl.textContent = file.name;
-    if(!importTituloEl.value.trim()){
-      importTituloEl.value = file.name.replace(/\.pdf$/i,"").replace(/[-_]+/g," ").trim();
-    }
-    importSaveBtn.disabled = false;
+    var titulo = file.name.replace(/\.pdf$/i,"").replace(/[-_]+/g," ").trim();
+    importTituloEl.value = titulo;
+    var periodo = importPeriodoEl.value.trim() || String(new Date().getFullYear());
+    importSaveBtn.disabled = true;
+    importSaveBtn.textContent = "Guardando…";
+    var reader = new FileReader();
+    reader.onload = function(e){
+      saveImportDoc(importPendingCat, titulo, "", periodo, e.target.result, function(){
+        importSaveBtn.textContent = "Guardar";
+        closeImportModal();
+        renderCategorias();
+      });
+    };
+    reader.readAsArrayBuffer(file);
   });
 
   importCancelBtn.addEventListener("click", closeImportModal);
@@ -945,23 +955,7 @@
     if(e.target === importModal){ closeImportModal(); }
   });
 
-  importSaveBtn.addEventListener("click", function(){
-    if(!importPendingFile || !importPendingCat) return;
-    var titulo = importTituloEl.value.trim() || importPendingFile.name;
-    var desc = importDescEl.value.trim();
-    var periodo = importPeriodoEl.value.trim() || String(new Date().getFullYear());
-    importSaveBtn.disabled = true;
-    importSaveBtn.textContent = "Guardando…";
-    var reader = new FileReader();
-    reader.onload = function(e){
-      saveImportDoc(importPendingCat, titulo, desc, periodo, e.target.result, function(){
-        importSaveBtn.textContent = "Guardar";
-        closeImportModal();
-        renderCategorias();
-      });
-    };
-    reader.readAsArrayBuffer(importPendingFile);
-  });
+  /* El guardado ahora ocurre automáticamente al seleccionar el archivo */
 
   function renderJefes(){
     var grid = document.getElementById("jefesGrid");

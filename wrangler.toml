@@ -1,0 +1,17 @@
+name = "portal-clas-querencia-api"
+main = "worker/index.js"
+compatibility_date = "2024-09-23"
+
+[[r2_buckets]]
+binding = "DOCS_BUCKET"
+bucket_name = "portal-clas-docs"
+
+[[kv_namespaces]]
+binding = "DOCS_META"
+# Reemplazar con el ID real después de ejecutar:
+# wrangler kv namespace create DOCS_META
+id = "REEMPLAZAR_CON_KV_NAMESPACE_ID"
+
+# Secreto UPLOAD_SECRET: configurar con:
+# wrangler secret put UPLOAD_SECRET
+# (ingresar la contraseña del portal cuando lo solicite)

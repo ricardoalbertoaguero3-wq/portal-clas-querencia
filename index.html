@@ -630,6 +630,9 @@
   var PASSWORD = "Querencia2026";
   var SESSION_KEY = "claq_unlocked";
 
+  // URL del Cloudflare Worker (dejar vacío si no está configurado aún)
+  var WORKER_URL = "";
+
   if (window['pdfjsLib']) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
@@ -768,21 +771,65 @@
     req.onerror = cb;
   }
 
+  /* ---- Documentos en la nube (Cloudflare Worker + R2) ---- */
+  var cloudDocs = [];
+
+  function initCloudDocs(cb){
+    if(!WORKER_URL){ cb(); return; }
+    fetch(WORKER_URL + "/api/docs")
+      .then(function(r){ return r.json(); })
+      .then(function(docs){ cloudDocs = docs || []; cb(); })
+      .catch(function(){ cb(); });
+  }
+
+  function saveCloudDoc(catNombre, titulo, periodo, file, cb){
+    if(!WORKER_URL){ cb(null); return; }
+    var form = new FormData();
+    form.append("file", file);
+    form.append("catNombre", catNombre);
+    form.append("titulo", titulo);
+    form.append("periodo", periodo);
+    fetch(WORKER_URL + "/api/upload", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + PASSWORD },
+      body: form
+    })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(meta){
+        if(meta){ cloudDocs.push(meta); }
+        cb(meta);
+      })
+      .catch(function(){ cb(null); });
+  }
+
+  function deleteCloudDoc(id, cb){
+    if(!WORKER_URL){ cb(); return; }
+    fetch(WORKER_URL + "/api/docs/" + id, {
+      method: "DELETE",
+      headers: { "Authorization": "Bearer " + PASSWORD }
+    }).then(function(){ cb(); }).catch(function(){ cb(); });
+  }
+
   function renderCategorias(){
-    if(!importDB){ renderCategoriasSync({}); return; }
+    var cloudByCat = {};
+    cloudDocs.forEach(function(d){
+      if(!cloudByCat[d.catNombre]) cloudByCat[d.catNombre] = [];
+      cloudByCat[d.catNombre].push(d);
+    });
+    if(!importDB){ renderCategoriasSync({}, cloudByCat); return; }
     var pending = DATA.categorias.length;
-    if(pending === 0){ renderCategoriasSync({}); return; }
+    if(pending === 0){ renderCategoriasSync({}, cloudByCat); return; }
     var importedByCat = {};
     DATA.categorias.forEach(function(cat){
       loadImportDocs(cat.nombre, function(docs){
         importedByCat[cat.nombre] = docs;
         pending--;
-        if(pending === 0){ renderCategoriasSync(importedByCat); }
+        if(pending === 0){ renderCategoriasSync(importedByCat, cloudByCat); }
       });
     });
   }
 
-  function renderCategoriasSync(importedByCat){
+  function renderCategoriasSync(importedByCat, cloudByCat){
     var root = document.getElementById("categorias");
     root.innerHTML = "";
     DATA.categorias.forEach(function(cat){
@@ -791,10 +838,16 @@
                  periodo:imp.periodo||"", _local:true, _id:imp.id, _data:imp.data };
       });
 
-      var allDocs = cat.docs.concat(imported);
+      var cloud = (cloudByCat[cat.nombre]||[]).map(function(d){
+        return { titulo:d.titulo, descripcion:d.descripcion||"",
+                 periodo:d.periodo||"", _cloud:true, _cloudId:d.id,
+                 file: WORKER_URL + "/api/docs/" + d.id + "/file" };
+      });
 
-      // Ordenar alfabéticamente cuando hay archivos locales agregados
-      if(imported.length > 0){
+      var allDocs = cat.docs.concat(cloud).concat(imported);
+
+      // Ordenar alfabéticamente cuando hay archivos adicionales
+      if(imported.length > 0 || cloud.length > 0){
         allDocs.sort(function(a,b){
           return (a.titulo||"").localeCompare(b.titulo||"","es",{sensitivity:"base"});
         });
@@ -818,10 +871,13 @@
       h.appendChild(importBtn);
       wrap.appendChild(h);
 
-      if(imported.length > 0){
+      if(imported.length > 0 || cloud.length > 0){
+        var parts = [];
+        if(cloud.length > 0) parts.push(cloud.length + " archivo(s) en la nube");
+        if(imported.length > 0) parts.push(imported.length + " archivo(s) local(es)");
         var notice = document.createElement("p");
         notice.className = "sort-notice";
-        notice.textContent = "Ordenado alfabéticamente · " + imported.length + " archivo(s) importado(s) localmente";
+        notice.textContent = "Ordenado alfabéticamente · " + parts.join(" · ");
         wrap.appendChild(notice);
       }
 
@@ -852,7 +908,28 @@
         tagPeriod.textContent = doc.periodo;
         docSide.appendChild(tagPeriod);
 
-        if(doc._local){
+        if(doc._cloud){
+          var openLblCloud = document.createElement("span");
+          openLblCloud.className = "doc-open";
+          openLblCloud.textContent = "Ver documento →";
+          docSide.appendChild(openLblCloud);
+          var delBtnCloud = document.createElement("button");
+          delBtnCloud.className = "doc-del";
+          delBtnCloud.type = "button";
+          delBtnCloud.title = "Eliminar documento de la nube";
+          delBtnCloud.textContent = "✕";
+          (function(d){ delBtnCloud.addEventListener("click", function(e){
+            e.stopPropagation();
+            if(confirm("¿Eliminar \"" + d.titulo + "\" del servidor?")){
+              deleteCloudDoc(d._cloudId, function(){
+                cloudDocs = cloudDocs.filter(function(x){ return x.id !== d._cloudId; });
+                renderCategorias();
+              });
+            }
+          }); })(doc);
+          docSide.appendChild(delBtnCloud);
+          (function(d){ row.addEventListener("click", function(){ openViewer(d); }); })(doc);
+        } else if(doc._local){
           var tagLocal = document.createElement("span");
           tagLocal.className = "tag-local";
           tagLocal.textContent = "local";
@@ -938,15 +1015,26 @@
     var periodo = importPeriodoEl.value.trim() || String(new Date().getFullYear());
     importSaveBtn.disabled = true;
     importSaveBtn.textContent = "Guardando…";
-    var reader = new FileReader();
-    reader.onload = function(e){
-      saveImportDoc(importPendingCat, titulo, "", periodo, e.target.result, function(){
+
+    if(WORKER_URL){
+      // Subir a la nube (visible para todos)
+      saveCloudDoc(importPendingCat, titulo, periodo, file, function(meta){
         importSaveBtn.textContent = "Guardar";
         closeImportModal();
         renderCategorias();
       });
-    };
-    reader.readAsArrayBuffer(file);
+    } else {
+      // Fallback: guardar localmente en IndexedDB
+      var reader = new FileReader();
+      reader.onload = function(e){
+        saveImportDoc(importPendingCat, titulo, "", periodo, e.target.result, function(){
+          importSaveBtn.textContent = "Guardar";
+          closeImportModal();
+          renderCategorias();
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
   });
 
   importCancelBtn.addEventListener("click", closeImportModal);
@@ -1110,9 +1198,11 @@
 
   /* ---- Restaurar sesión si ya estaba desbloqueada ---- */
   initImportDB(function(){
-    try{
-      if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
-    }catch(e){}
+    initCloudDocs(function(){
+      try{
+        if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
+      }catch(e){}
+    });
   });
 
 })();

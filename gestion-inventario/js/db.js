@@ -62,6 +62,7 @@
     red: 'Red de Salud Huaral – Chancay / DIRESA Lima',
     ruc: '',
     jefe: '',
+    presidente_cd: '',
     oga_nombre: 'Oficina de Administración de la Unidad Ejecutora',
     oga_responsable: '',
     responsable_patrimonio: '',

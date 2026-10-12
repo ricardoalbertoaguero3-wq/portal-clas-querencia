@@ -195,3 +195,25 @@ test('cada acto tiene base legal y grupo; la matriz normativa cubre los Títulos
   assert.ok(N.MATRIZ.length >= 15);
   assert.ok(N.informeSustento({ entidad: 'X', establecimiento: 'Y' }).recomendaciones.length >= 3);
 });
+
+test('cogestión CLAS: transferencia al Gobierno Regional (D.S. 017-2008-SA, arts. 63.d y 68.d)', () => {
+  const propio = bien({ codigo: '111111111111', origen: 'CLAS' });
+  const estado = bien({ codigo: '222222222222', origen: 'UE' });
+  const mov = { tipo: 'TRANSFERENCIA_GR', items: [propio.codigo], documento: 'Acta 01-2026', destino_externo: 'DIRESA Lima' };
+  assert.deepStrictEqual(errores(mov, propio), []);
+  assert.ok(errores(Object.assign({}, mov, { items: [estado.codigo] }), estado).some((x) => x.includes('pendiente de transferencia')));
+  const r = C.aplicarMovimiento(Object.assign({ fecha: HOY }, mov), propio);
+  assert.strictEqual(r.bien.origen, 'UE');
+  assert.strictEqual(r.bien.situacion, 'ACTIVO', 'el bien sigue en uso en el establecimiento');
+  assert.strictEqual(r.antes.origen, 'CLAS', 'la anulación puede revertir la titularidad');
+  const al = C.alertasNormativas([bien({ codigo: '3', origen: 'DONACION', fecha_alta: '2025-06-01' }), bien({ codigo: '4', origen: 'CLAS', fecha_alta: '2026-06-01' })], [], [], HOY);
+  assert.ok(al.some((a) => a.nivel === 'warn' && a.ref.includes('63.d')), 'ejercicio anterior sin transferir');
+  assert.ok(al.some((a) => a.nivel === 'info' && a.ref.includes('63.d') && a.texto.includes('2026')), 'ejercicio en curso');
+});
+
+test('el sustento legal incorpora el Reglamento de la Ley N° 29124', () => {
+  const arts = N.REGLAMENTO_CLAS.map((r) => r[0]);
+  ['Art. 7', 'Art. 43.f', 'Art. 49.e', 'Art. 63.d', 'Art. 68.d', 'Art. 81.d', 'Arts. 107–108'].forEach((a) => assert.ok(arts.includes(a), a));
+  assert.ok(N.BASE_LEGAL.some((b) => b[0].includes('017-2008-SA')));
+  assert.ok(N.informeSustento({ entidad: 'X', establecimiento: 'Y' }).analisis.some((p) => p.includes('art. 43.f')));
+});

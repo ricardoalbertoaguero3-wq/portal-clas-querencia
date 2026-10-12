@@ -4,8 +4,9 @@
  *
  * Implementa la Directiva N° 0006-2021-EF/54.01 "Directiva para la gestión
  * de bienes muebles patrimoniales en el marco del Sistema Nacional de
- * Abastecimiento" (R.D. N° 0015-2021-EF/54.01). Cada catálogo indica el
- * artículo que lo sustenta.
+ * Abastecimiento" (R.D. N° 0015-2021-EF/54.01), complementada con el
+ * Reglamento de la Ley N° 29124 de cogestión CLAS (D.S. N° 017-2008-SA).
+ * Cada catálogo indica el artículo que lo sustenta.
  *
  * No depende del navegador: se usa en la app y en las pruebas (node --test).
  * ===================================================================== */
@@ -28,13 +29,17 @@
     DISPUESTO: 'Excluido del patrimonio (disposición o art. 60.3)'
   };
 
+  /* Titularidad. Los bienes adquiridos o donados al CLAS durante el ejercicio se transfieren
+   * a título gratuito al Gobierno Regional y se incorporan al patrimonio del Estado
+   * (arts. 63.d y 68.d del D.S. N° 017-2008-SA). */
   const ORIGENES = {
-    UE: 'Patrimonio de la Unidad Ejecutora (bien del Estado)',
-    CLAS: 'Adquirido por el CLAS',
-    DONACION: 'Recibido en donación',
-    AFECTACION: 'Recibido en afectación en uso',
+    UE: 'Patrimonio del Estado (Gobierno Regional / UE), en administración del CLAS',
+    CLAS: 'Adquirido por el CLAS — pendiente de transferir al Gobierno Regional (art. 63.d)',
+    DONACION: 'Donado al CLAS — pendiente de transferir al Gobierno Regional (art. 68.d)',
+    AFECTACION: 'Recibido en afectación en uso de otra entidad',
     NO_DETERMINADO: 'No determinado (sanear)'
   };
+  const ORIGENES_POR_TRANSFERIR = ['CLAS', 'DONACION'];
 
   /** Art. 27 */
   const MODALIDADES_ASIGNACION = ['Sede institucional (art. 28)', 'Teletrabajo (art. 29)'];
@@ -119,7 +124,8 @@
     { id: 'TRASLADO', titulo: 'Salida, reingreso y desplazamiento interno', arts: 'Arts. 28.4, 30.c y 87 · Anexo N° 04' },
     { id: 'IX', titulo: 'Título IX — Mantenimiento', arts: 'Arts. 83–88' },
     { id: 'VII', titulo: 'Título VII — Baja', arts: 'Arts. 47–51' },
-    { id: 'VIII', titulo: 'Título VIII — Disposición final', arts: 'Arts. 52–82' }
+    { id: 'VIII', titulo: 'Título VIII — Disposición final', arts: 'Arts. 52–82' },
+    { id: 'CLAS', titulo: 'Cogestión CLAS — Bienes adquiridos o donados al CLAS', arts: 'D.S. N° 017-2008-SA, arts. 63.d y 68.d' }
   ];
 
   /* Tipos de movimiento.
@@ -211,6 +217,16 @@
       requiere: ['causal', 'informe_tecnico', 'resolucion', 'destino_externo'],
       etiquetas: { causal: 'Acto de disposición', destino_externo: 'Beneficiario / adjudicatario / operador', valor_tasacion: 'Valor de tasación S/ (arts. 92–93)' },
       descripcion: 'Otorga la propiedad de bienes ya dados de baja (art. 60.1).'
+    },
+    TRANSFERENCIA_GR: {
+      nombre: 'Transferencia al Gobierno Regional', prefijo: 'TGR', grupo: 'CLAS',
+      base: 'Arts. 63.d y 68.d del D.S. N° 017-2008-SA; art. 16.1.e de la Directiva', anexo: 'Anexo N° 02', desde: ['ACTIVO', 'EN_SALIDA'],
+      origenes: ORIGENES_POR_TRANSFERIR,
+      campos: ['documento', 'destino_externo', 'contraparte', 'contraparte_doc', 'contraparte_cargo', 'motivo'],
+      requiere: ['documento', 'destino_externo'],
+      etiquetas: { documento: 'Documento de transferencia emitido por el CLAS (art. 17.1.e de la Directiva)', destino_externo: 'Autoridad Sanitaria Regional / Gobierno Regional receptor',
+        contraparte: 'Representante que recibe' },
+      descripcion: 'Transfiere a título gratuito los bienes que el CLAS adquirió o recibió en donación durante el ejercicio, para su incorporación al patrimonio del Estado. Los bienes siguen en uso en el establecimiento.'
     },
     INVENTARIO: {
       nombre: 'Regularización por inventario', prefijo: 'INV', grupo: null, base: 'Art. 35.6.a', anexo: 'Anexo N° 06', desde: ['ACTIVO', 'EN_SALIDA', 'FALTANTE', 'AFECTADO'],
@@ -436,6 +452,9 @@
           if (c.soloFaltante && b.situacion !== 'FALTANTE') errores.push(`${cod}: la causal "${c.nombre}" solo procede para bienes faltantes (art. 44).`);
           if (c.estado && b.estado !== c.estado) errores.push(`${cod}: para la causal "${c.nombre}" el bien debe figurar en estado "${c.estado}". Actualice antes su estado de conservación.`);
           break;
+        case 'TRANSFERENCIA_GR':
+          if (!ORIGENES_POR_TRANSFERIR.includes(b.origen)) errores.push(`${cod}: no figura como bien adquirido o donado al CLAS pendiente de transferencia; su titularidad es "${(ORIGENES[b.origen] || b.origen).split(' (')[0]}".`);
+          break;
         case 'DISPOSICION':
           if (c.noRAEE && b.estado === 'RAEE') errores.push(`${cod}: los RAEE no pueden ser eliminados (8ª Disp. Complementaria Final).`);
           if (c.soloRAEE && b.estado !== 'RAEE') errores.push(`${cod}: solo se entregan a un operador RAEE los bienes calificados como RAEE.`);
@@ -450,7 +469,7 @@
   // Aplicación de movimientos
   // ---------------------------------------------------------------
   /** Campos del bien que cambian por actos (se guardan antes/después para el kardex y la anulación) */
-  const CAMPOS_TRAZABLES = ['situacion', 'estado', 'ubicacion', 'responsable', 'fecha_baja', 'causal_baja', 'resolucion_baja', 'afectataria', 'afectacion_vence', 'ultimo_mantenimiento'];
+  const CAMPOS_TRAZABLES = ['situacion', 'estado', 'ubicacion', 'responsable', 'origen', 'fecha_transferencia', 'fecha_baja', 'causal_baja', 'resolucion_baja', 'afectataria', 'afectacion_vence', 'ultimo_mantenimiento'];
   const instantanea = (b) => CAMPOS_TRAZABLES.reduce((o, k) => (o[k] = b[k] || '', o), {});
 
   /** Aplica el movimiento a un bien y devuelve {bien, antes, despues}, sin mutar el original */
@@ -510,6 +529,10 @@
         break;
       case 'DISPOSICION':
         b.situacion = 'DISPUESTO';
+        break;
+      case 'TRANSFERENCIA_GR':
+        b.origen = 'UE';
+        b.fecha_transferencia = mov.fecha;
         break;
       case 'INVENTARIO': {
         const r = (mov.regularizacion || {})[b.codigo] || {};
@@ -658,15 +681,22 @@
       (n) => `${n} bienes sin ubicación física registrada`, 'Art. 22.1', '#/bienes?ubicacion=SIN%20UBICACION');
     add('info', bienes.filter((b) => b.poliza_vence && b.poliza_vence < h && !['DISPUESTO'].includes(b.situacion)),
       (n) => `${n} bienes con póliza de seguro vencida`, 'Art. 89; 7ª DCF', '#/mantenimiento');
+    // Transferencia anual de bienes adquiridos o donados al CLAS (D.S. N° 017-2008-SA, arts. 63.d y 68.d)
+    const porTransferir = bienes.filter((b) => b.situacion !== 'DISPUESTO' && ORIGENES_POR_TRANSFERIR.includes(b.origen));
+    const anioIngreso = (b) => Number(String(b.fecha_alta || b.fecha_adquisicion || h).slice(0, 4));
+    add('warn', porTransferir.filter((b) => anioIngreso(b) < anio),
+      (n) => `${n} bienes adquiridos o donados al CLAS en ejercicios anteriores siguen sin transferir al Gobierno Regional`, 'D.S. 017-2008-SA, arts. 63.d y 68.d', '#/nuevo/TRANSFERENCIA_GR');
+    add('info', porTransferir.filter((b) => anioIngreso(b) >= anio),
+      (n) => `${n} bienes adquiridos o donados al CLAS en ${anio}: transferir al Gobierno Regional al cierre del ejercicio`, 'D.S. 017-2008-SA, arts. 63.d y 68.d', '#/nuevo/TRANSFERENCIA_GR');
     add('info', bienes.filter((b) => !['DISPUESTO', 'BAJA'].includes(b.situacion) && b.origen === 'NO_DETERMINADO'),
-      (n) => `${n} bienes sin titularidad definida (UE o CLAS)`, 'Art. 3 · ver Marco normativo', '#/normativa');
+      (n) => `${n} bienes sin titularidad registrada (Estado o CLAS pendiente de transferir)`, 'D.S. 017-2008-SA, art. 63.d', '#/normativa');
     const extemp = movs.filter((m) => m.registrado && diasHabiles(m.fecha, m.registrado.slice(0, 10)) > 10 && m.fecha.slice(0, 4) === String(anio));
     add('info', extemp.map((m) => m.numero), (n) => `${n} actos registrados después de 10 días hábiles de ocurridos`, 'Art. 23', '#/movimientos');
     return al;
   }
 
   const API = {
-    ESTADOS_CONSERVACION, SITUACIONES, ORIGENES, MODALIDADES_ASIGNACION, TIPOS_MANTENIMIENTO,
+    ESTADOS_CONSERVACION, SITUACIONES, ORIGENES, ORIGENES_POR_TRANSFERIR, MODALIDADES_ASIGNACION, TIPOS_MANTENIMIENTO,
     CAUSALES_ALTA, CAUSALES_BAJA, MODALIDADES_DISPOSICION, MOTIVOS_SALIDA, CAUSALES_EXTINCION, CAUSALES_POR_TIPO,
     GRUPOS, TIPOS_MOVIMIENTO, ETIQUETAS_CAMPO, CAMPOS_TRAZABLES, SITUACIONES_INVENTARIABLES,
     causalDef, etiqueta, camposObligatorios, limpiar, hoyISO, diasHabiles, sumarMeses, aFechaISO, aNumero,

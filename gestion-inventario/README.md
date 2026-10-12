@@ -50,13 +50,22 @@ la DGA-MEF, no a la SBN.
 - Sustento legal completo, matriz módulo ↔ artículo ↔ anexo y puntos por definir: [`docs/SUSTENTO_LEGAL.md`](docs/SUSTENTO_LEGAL.md).
 - Dentro del aplicativo: **Marco normativo → Imprimir informe de sustento legal**.
 
-**Principales ambigüedades (detalle en el documento):**
-- El CLAS no es una Entidad del SNA (art. 3).
-- El registro oficial es el SIGA MEF de la UE (arts. 21 y 23).
-- Falta definir quién actúa como OGA y como OCP.
-- El plazo de presentación del inventario puede ser el 15/03 o el 31/03.
-- Hay que verificar las modificatorias posteriores a 2021.
-- La UIT por defecto es la de 2025 (S/ 5,350): actualícela.
+Se complementa con el **Reglamento de la Ley N° 29124 (D.S. N° 017-2008-SA)**:
+- Los bienes adquiridos o donados al CLAS se transfieren al Gobierno Regional (arts. 63.d y 68.d). El aplicativo lo
+  implementa con el acto **Transferencia al Gobierno Regional**.
+- El Consejo Directivo y el Gerente custodian los bienes y deben informar sobre ellos (arts. 43.f, 49.c, 49.e y 49.h).
+  El aplicativo lo implementa con el **Informe de situación patrimonial**: mensual, semestral, de rendición de cuentas o
+  de diagnóstico.
+- Otras disposiciones: plan anual de mantenimiento (81.d), supervisión semestral (103.d) y control de la Ley N° 27785 (108).
+
+**Puntos por definir (detalle en el documento):**
+- Alcance del art. 36.o ("patrimonio de la CLAS").
+- Oportunidad de la transferencia.
+- Quién actúa como OGA y como OCP.
+- Participación del CLAS en el inventario regional (art. 79.f) y plazo.
+- Plan de mantenimiento anual frente al multianual.
+- Modificatorias posteriores.
+- UIT 2026.
 
 ## 4. Arquitectura
 
@@ -91,7 +100,8 @@ persona responsable de Control Patrimonial. Para uso multiusuario ver el roadmap
 | Inventario y supervisión | Tít. V y X | Comisión por resolución (32). Fases: planificación (plan, contraste de usuarios), campo (Anexo N° 07; uso/desuso; física/digital; sobrantes), gabinete (conciliación, Anexo N° 05; informe, Anexo N° 06), cierre con regularización y presentación (Anexo N° 09). |
 | Saneamiento | Tít. VI | Faltantes → baja por saneamiento o sustracción. Sobrantes → evaluación del año de posesión (39), excepción para RAEE y chatarra (43), alta. |
 | Mantenimiento y seguros | Tít. IX | Registro de mantenimientos por tipo (84), salidas para mantenimiento (87), planes (86, 90) y pólizas (89). |
-| Marco normativo | — | Sustento legal, matriz y ambigüedades. |
+| Marco normativo | — | Sustento legal: Directiva, Reglamento CLAS, matriz y ambigüedades. |
+| Reportes | Reglamento 36.n, 43.f, 49.c, 49.h, 104 | Informe de situación patrimonial; fichas por usuario; exportaciones. |
 
 ### Actos y reglas
 
@@ -108,6 +118,7 @@ persona responsable de Control Patrimonial. Para uso multiusuario ver el roadmap
 | Afectación en uso | Activo | Afectataria, informe técnico, finalidad, plazo máximo de 1 año (56.1) | Anexo N° 02 |
 | Extinción de afectación | Afectado | Causal (58) y resolución | Anexo N° 02 |
 | Disposición | Baja | Modalidad (61), informe técnico, resolución y beneficiario. Subasta y permuta: tasación. RAEE: no se elimina (8ª DCF). | Anexo N° 02 |
+| Transferencia al Gobierno Regional | Bienes "Adquirido por el CLAS" o "Donado al CLAS" | Documento de transferencia y receptor (Reglamento 63.d y 68.d). El bien sigue en uso; la titularidad pasa a patrimonio del Estado. | Anexo N° 02 + relación valorizada |
 
 Situaciones del bien: Activo → En salida / Afectado / Faltante → Baja → Excluido del patrimonio. La baja por saneamiento de
 faltantes excluye el bien sin acto de disposición (art. 60.3).
@@ -158,7 +169,7 @@ Roles:
 
 ## 8. Plan de pruebas
 
-- **Unitarias** (reglas de la Directiva, plazos, inventario y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 18 pruebas.
+- **Unitarias** (reglas de la Directiva, plazos, inventario y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 20 pruebas.
 - **Funcionales (verificadas en Chromium):** carga de 537 bienes; asignación de 20 bienes (Anexo N° 03); salida
   incompleta rechazada; baja de 4 bienes con borrador e Informe Técnico (Anexo N° 01); disposición por donación (Anexo N° 02)
   y su anulación; inventario anual sin resolución rechazado; inventario con faltante, diferencia, uso/desuso y sobrante;

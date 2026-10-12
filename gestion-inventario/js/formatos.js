@@ -118,7 +118,8 @@
     const motivo = {
       ALTA: `alta por ${m.causal}`, DISPOSICION: `${m.causal} aprobada por ${m.resolucion}`,
       AFECTACION: `afectación en uso aprobada por ${m.resolucion || m.informe_tecnico}, con vencimiento el ${fecha(m.fecha_retorno)}`,
-      EXTINCION_AFECTACION: `extinción de la afectación en uso por ${m.causal} (${m.resolucion})`
+      EXTINCION_AFECTACION: `extinción de la afectación en uso por ${m.causal} (${m.resolucion})`,
+      TRANSFERENCIA_GR: `transferencia a título gratuito de los bienes adquiridos o recibidos en donación por el ${cfg.entidad}, para su incorporación al patrimonio de bienes del Estado y a las cuentas contables correspondientes (arts. 63.d y 68.d del D.S. N° 017-2008-SA), según ${m.documento}`
     }[m.tipo] || m.motivo;
     const favor = entregaOCP ? (m.destino_externo || m.contraparte) : cfg.entidad;
     const hora = new Date(m.registrado || Date.now()).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
@@ -132,7 +133,8 @@
       <p class="texto">La reunión tuvo como finalidad proceder a la entrega y recepción de los bienes descritos en el Apéndice A "Ficha de descripción de los bienes
       muebles patrimoniales", a favor de ${esc(favor)}. La entrega de los bienes muebles se efectúa en razón de ${esc(motivo)}.
       Estando de acuerdo las partes, previa verificación de la existencia y el estado de los bienes entregados, firman la presente en señal de conformidad.</p>` +
-      firmas(entregaOCP ? [['Por la entrega', cfg.responsable_patrimonio], ['Por la recepción', m.contraparte]] : [['Por la entrega', m.contraparte], ['Por la recepción', cfg.responsable_patrimonio]]) +
+      firmas(m.tipo === 'TRANSFERENCIA_GR' ? [['Por la entrega — Gerente del CLAS', cfg.jefe], ['Por la entrega — Control Patrimonial', cfg.responsable_patrimonio], ['Por la recepción', m.contraparte]]
+        : entregaOCP ? [['Por la entrega', cfg.responsable_patrimonio], ['Por la recepción', m.contraparte]] : [['Por la entrega', m.contraparte], ['Por la recepción', cfg.responsable_patrimonio]]) +
       salto + apendiceA(m.detalle, { lote: /Subasta/.test(m.causal || '') }) + pie(cfg);
   }
 
@@ -235,6 +237,9 @@
         break;
       case 'AFECTACION': case 'EXTINCION_AFECTACION': case 'DISPOSICION':
         html = actaEntregaRecepcion(m, ctx);
+        break;
+      case 'TRANSFERENCIA_GR':
+        html = actaEntregaRecepcion(m, ctx) + salto + apendiceA(m.detalle, { extendida: true, causal: 'Transferencia (art. 16.1.e)', titulo: 'RELACIÓN VALORIZADA DE LOS BIENES TRANSFERIDOS (para el alta en el registro de la entidad receptora)' });
         break;
       case 'BAJA':
         html = cabecera(cfg, 'Arts. 47–49', 'RELACIÓN DE BIENES MUEBLES PATRIMONIALES DADOS DE BAJA', m.numero) +
@@ -397,9 +402,50 @@
       bienes muebles patrimoniales correspondiente al año ${inv.anio}, efectuado por ${esc(cfg.entidad)} — ${esc(cfg.establecimiento)}, de la provincia de Huaral y
       departamento de Lima: Informe Final de Inventario (Anexo N° 06) y Acta de Conciliación de Inventario (Anexo N° 05).</p>
       <p class="texto">Hago propicia la ocasión para expresarle los sentimientos de mi especial consideración.</p><p>Atentamente,</p>
-      <div style="margin-top:60px;width:50%;border-top:1px solid #000;text-align:center;font-size:9pt">${esc(cfg.jefe)}<br>Jefe(a) / Gerente<br>${esc(cfg.entidad)}</div>
+      <div style="margin-top:60px;width:50%;border-top:1px solid #000;text-align:center;font-size:9pt">${esc(cfg.jefe)}<br>Gerente del CLAS<br>${esc(cfg.entidad)}</div>
       <p class="nota" style="margin-top:20px">Plazo (art. 36.1): las Organizaciones de la Entidad remiten el sustento de inventario a la OGA de la Entidad hasta el 15 de marzo; la Entidad lo remite a la DGA hasta el 31 de marzo del año siguiente.</p></div>`;
   }
+
+  // ---------------------------------------------------------------
+  // Informe de situación patrimonial (D.S. N° 017-2008-SA, arts. 36.n, 43.f, 49.c, 49.h y 104)
+  // ---------------------------------------------------------------
+  const TIPOS_INFORME = {
+    MENSUAL: { titulo: 'INFORME MENSUAL DE SITUACIÓN PATRIMONIAL', a: 'Consejo Directivo', ref: 'arts. 43.f y 49.c' },
+    SEMESTRAL: { titulo: 'INFORME SEMESTRAL DE SITUACIÓN PATRIMONIAL', a: 'Asamblea General', ref: 'arts. 36.n y 49.c' },
+    RENDICION: { titulo: 'INFORME PATRIMONIAL PARA LA RENDICIÓN DE CUENTAS', a: 'DIRESA / comunidad', ref: 'art. 104' },
+    DIAGNOSTICO: { titulo: 'DIAGNÓSTICO DE LA SITUACIÓN PATRIMONIAL — INICIO DE GESTIÓN DEL GERENTE', a: 'Consejo Directivo', ref: 'art. 49.h' }
+  };
+  function informeSituacion(tipo, desde, hasta, datos, ctx) {
+    const cfg = ctx.config;
+    const t = TIPOS_INFORME[tipo];
+    const k = datos.indicadores;
+    const tabla = (cab, filas) => `<table><thead><tr>${cab.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${filas.map((f) => `<tr>${f.map((c, i) => `<td${i ? ' style="text-align:right"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const porTipo = {};
+    datos.movs.forEach((m) => { const x = porTipo[m.tipo] = porTipo[m.tipo] || { n: 0, bienes: 0 }; x.n++; x.bienes += m.items.length; });
+    const recom = datos.alertas.map((a) => `${a.texto} (${a.ref}).`);
+    return cabecera(cfg, 'D.S. N° 017-2008-SA, ' + t.ref, t.titulo, '') +
+      datos_([['A', `${t.a}${t.a === 'Consejo Directivo' && cfg.presidente_cd ? ' — ' + cfg.presidente_cd + ', Presidente(a)' : ''}`], ['DE', `${cfg.jefe || 'Gerente'} — Gerente del CLAS`],
+        ['ASUNTO', `Situación de los bienes patrimoniales administrados por el ${cfg.entidad}`], ['PERÍODO', tipo === 'DIAGNOSTICO' ? `Situación al ${fecha(hasta)}` : `Del ${fecha(desde)} al ${fecha(hasta)}`], ['FECHA', fecha(Core.hoyISO())]]) +
+      `<h3 class="sub">I. BASE LEGAL</h3>${caja('• Ley N° 29124 y su Reglamento, D.S. N° 017-2008-SA: ' + esc(t.ref) + ', 43.f, 49.e, 63.d y 68.d.<br>• Directiva N° 0006-2021-EF/54.01 (R.D. N° 0015-2021-EF/54.01).')}
+      <h3 class="sub">II. BIENES ADMINISTRADOS</h3>` +
+      tabla(['Concepto', 'Cantidad', 'Valor'], [
+        ['Bienes en patrimonio (activos, en salida, afectados o faltantes)', k.total, soles(k.valor)],
+        ['— Activo fijo (≥ 1/4 UIT, referencial)', k.activoFijo, ''], ['— Bienes no depreciables (< 1/4 UIT, referencial)', k.cuentasOrden, ''],
+        ['Dados de baja, pendientes de disposición', k.pendientesDisposicion, ''], ['Faltantes', k.faltantes, ''], ['Afectados en uso a otras entidades', k.afectados, '']]) +
+      '<h3 class="sub">Por estado de conservación</h3>' + tabla(['Estado', 'Bienes'], Core.ESTADOS_CONSERVACION.map((e) => [esc(e), k.porEstado[e] || 0])) +
+      '<h3 class="sub">Por titularidad</h3>' + tabla(['Titularidad', 'Bienes', 'Valor'], Object.entries(datos.titularidad).map(([o, x]) => [esc((Core.ORIGENES[o] || o)), x.n, soles(x.v)])) +
+      `<h3 class="sub">III. ACTOS REGISTRADOS EN EL PERÍODO</h3>` +
+      (datos.movs.length ? tabla(['Acto', 'N° de actos', 'Bienes comprendidos'], Object.entries(porTipo).map(([tp, x]) => [esc(Core.TIPOS_MOVIMIENTO[tp].nombre), x.n, x.bienes]))
+        + '<table style="margin-top:4px"><thead><tr><th>N°</th><th>Fecha</th><th>Acto</th><th>Causal / motivo</th><th>Sustento</th><th>Bienes</th></tr></thead><tbody>'
+        + datos.movs.map((m) => `<tr><td>${esc(m.numero)}</td><td>${fecha(m.fecha)}</td><td>${esc(Core.TIPOS_MOVIMIENTO[m.tipo].nombre)}</td><td>${esc(m.causal || m.motivo || '')}</td><td>${esc(m.resolucion || m.documento || '')}</td><td style="text-align:right">${m.items.length}</td></tr>`).join('') + '</tbody></table>'
+        : caja('No se registraron actos en el período.')) +
+      `<h3 class="sub">IV. MANTENIMIENTO ${tipo === 'DIAGNOSTICO' ? '' : 'EN EL PERÍODO'} (art. 81.d)</h3>${caja(`${datos.mantenimientos} registro(s) de mantenimiento, con un costo de ${soles(datos.costoMantenimiento)}.`)}
+      <h3 class="sub">V. BIENES ADQUIRIDOS O DONADOS PENDIENTES DE TRANSFERIR AL GOBIERNO REGIONAL (arts. 63.d y 68.d)</h3>` +
+      (datos.porTransferir.length ? apendiceA(datos.porTransferir, { titulo: `${datos.porTransferir.length} bien(es)` }) : caja('No hay bienes pendientes de transferencia.')) +
+      `<h3 class="sub">VI. OBSERVACIONES Y ACCIONES RECOMENDADAS</h3>${caja(recom.length ? recom.map((r, i) => `${i + 1}. ${esc(r)}`).join('<br>') : 'Sin observaciones.')}` +
+      firmas([['Gerente del CLAS', cfg.jefe], ['Responsable de Control Patrimonial', cfg.responsable_patrimonio]]) + pie(cfg);
+  }
+  const datos_ = (pares) => datos(pares);
 
   // ---------------------------------------------------------------
   // Etiquetas de identificación (arts. 20.1, 20.4 y 35.3.d)
@@ -417,15 +463,17 @@
     const N = Normativa;
     const t = N.informeSustento(cfg);
     return cabecera(cfg, 'Estructura del Anexo N° 01', 'INFORME', 'Sustento legal del aplicativo de Gestión de Inventario') +
-      datos([['A', cfg.jefe ? cfg.jefe + ' — Jefatura / Gerencia' : 'Jefatura / Gerencia del CLAS'], ['DE', cfg.responsable_patrimonio || 'Responsable de Control Patrimonial'], ['ASUNTO', t.asunto], ['FECHA', fecha(Core.hoyISO())]]) +
+      datos([['A', (cfg.presidente_cd ? cfg.presidente_cd + ', Presidente(a) del Consejo Directivo' : 'Consejo Directivo del CLAS') + (cfg.jefe ? ' / ' + cfg.jefe + ', Gerente' : '')], ['DE', cfg.responsable_patrimonio || 'Responsable de Control Patrimonial'], ['ASUNTO', t.asunto], ['FECHA', fecha(Core.hoyISO())]]) +
       '<h3 class="sub">I. BASE LEGAL</h3><table>' + N.BASE_LEGAL.map((b, i) => `<tr><td style="width:20px">${i + 1}</td><td><b>${esc(b[0])}</b><br>${esc(b[1])}</td></tr>`).join('') + '</table>' +
       '<h3 class="sub">II. ANTECEDENTES</h3>' + lineas(t.antecedentes) +
       '<h3 class="sub">III. ANÁLISIS</h3>' + lineas(t.analisis) +
+      '<h3 class="sub">III-A. REGLAMENTO DE LA LEY N° 29124 (D.S. N° 017-2008-SA): DISPOSICIONES SOBRE BIENES</h3><table><thead><tr><th>Artículo</th><th>Contenido</th><th>Aplicación en el aplicativo</th></tr></thead><tbody>' +
+      N.REGLAMENTO_CLAS.map((r) => `<tr><td style="width:12%"><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('') + '</tbody></table>' +
       '<h3 class="sub">IV. PUNTOS DE INTERPRETACIÓN POR DEFINIR</h3><table>' + N.AMBIGUEDADES.map((a) => `<tr><td style="width:28%"><b>${esc(a[0])}</b></td><td>${esc(a[1])}</td></tr>`).join('') + '</table>' +
       '<h3 class="sub">V. CONCLUSIONES</h3>' + lineas(t.conclusiones.map((x, i) => `${i + 1}. ${x}`)) +
       '<h3 class="sub">VI. RECOMENDACIONES</h3>' + lineas(t.recomendaciones.map((x, i) => `${i + 1}. ${x}`)) +
       firmas([['Responsable de Control Patrimonial', cfg.responsable_patrimonio]]) + salto +
-      '<h3 class="sub">ANEXO: MATRIZ DE CORRESPONDENCIA APLICATIVO — DIRECTIVA N° 0006-2021-EF/54.01</h3><table><thead><tr><th>Módulo</th><th>Artículos</th><th>Formato</th><th>Control que aplica el aplicativo</th></tr></thead><tbody>' +
+      '<h3 class="sub">ANEXO: MATRIZ DE CORRESPONDENCIA APLICATIVO — DIRECTIVA N° 0006-2021-EF/54.01 Y D.S. N° 017-2008-SA</h3><table><thead><tr><th>Módulo</th><th>Artículos</th><th>Formato</th><th>Control que aplica el aplicativo</th></tr></thead><tbody>' +
       N.MATRIZ.map((m) => `<tr><td><b>${esc(m[0])}</b></td><td>${esc(m[1])}</td><td>${esc(m[2])}</td><td>${esc(m[3])}</td></tr>`).join('') + '</tbody></table>' + pie(cfg);
   }
 
@@ -438,6 +486,6 @@
 
   window.Formatos = {
     movimiento, informeTecnico, actaEntregaRecepcion, fichaAsignacion, ordenSalida, relacionResponsable, fichaBien,
-    fichaLevantamiento, actaConciliacion, informeFinal, comunicacionInventario, etiquetas, sustentoLegal, imprimir, esc, soles, fecha
+    fichaLevantamiento, actaConciliacion, informeFinal, comunicacionInventario, informeSituacion, TIPOS_INFORME, etiquetas, sustentoLegal, imprimir, esc, soles, fecha
   };
 })();

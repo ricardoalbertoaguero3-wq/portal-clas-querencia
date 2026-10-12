@@ -10,7 +10,7 @@
   /* Roles alineados con los responsables de la Directiva (art. 4.1):
    * OCP registra los actos; la Comisión de Inventario ejecuta el inventario (arts. 32–35);
    * Consulta corresponde a la OGA / Jefatura (supervisión, art. 6). */
-  const ROLES = { ADMIN: 'Administrador del sistema', PATRIMONIO: 'Control Patrimonial (OCP)', COMISION: 'Comisión de Inventario', CONSULTA: 'Consulta (OGA / Jefatura)' };
+  const ROLES = { ADMIN: 'Administrador del sistema', PATRIMONIO: 'Control Patrimonial (OCP)', COMISION: 'Comisión de Inventario', CONSULTA: 'Consulta (Gerencia / Consejo Directivo / OGA)' };
   const puede = {
     registrar: () => ['ADMIN', 'PATRIMONIO'].includes(S.usuario.rol),
     inventariar: () => ['ADMIN', 'PATRIMONIO', 'COMISION'].includes(S.usuario.rol),
@@ -223,7 +223,7 @@
         ${fila('Marca / Modelo', `${esc(b.marca)} / ${esc(b.modelo)}`)}${fila('Serie', esc(b.serie))}${fila('Dimensiones / Color', `${esc(b.medidas)} ${esc(b.color)}`)}
         ${fila('Estado de conservación', chipEstado(b.estado))}${fila('Situación', chipSituacion(b.situacion))}${fila('Ubicación física', esc(b.ubicacion))}
         ${fila('Usuario responsable', esc(nombrePersona(b.responsable)) || '<span class="muted">Sin asignar</span>')}
-        ${fila('Titularidad / origen', esc(Core.ORIGENES[b.origen]))}${fila('Orden de compra', esc(b.nro_orden))}${fila('Fecha de adquisición', fecha(b.fecha_adquisicion))}
+        ${fila('Titularidad', esc(Core.ORIGENES[b.origen]))}${fila('Transferido al Gobierno Regional', fecha(b.fecha_transferencia))}${fila('Orden de compra', esc(b.nro_orden))}${fila('Fecha de adquisición', fecha(b.fecha_adquisicion))}
         ${fila('Valor', soles(b.valor))}${fila('Clasificación (art. 5.c, ref.)', esc(Core.clasificacionContable(b.valor, S.cfg.uit)))}
         ${fila('Cuenta contable', esc(b.cuenta_contable) || '<span class="muted">Sin registrar (art. 22.1)</span>')}
         ${fila('Póliza de seguro', b.poliza ? `${esc(b.poliza)} — vence ${fecha(b.poliza_vence)}` : '')}
@@ -369,7 +369,7 @@
   function vistaNuevo(tipo, q) {
     const def = Core.TIPOS_MOVIMIENTO[tipo];
     if (!def || tipo === 'INVENTARIO' || !puede.registrar()) return marco('<div class="aviso bad">Acción no permitida.</div>');
-    const elegibles = def.desde ? S.bienes.filter((b) => def.desde.includes(b.situacion)) : [];
+    const elegibles = def.desde ? S.bienes.filter((b) => def.desde.includes(b.situacion) && (!def.origenes || def.origenes.includes(b.origen))) : [];
     const sel = new Set((q.get('sel') || '').split(',').filter((c) => elegibles.some((b) => b.codigo === c)));
     const sobranteRef = q.get('sobrante') || '';
     const sob = (() => { const [id, i] = sobranteRef.split(':'); const inv = S.inventarios.find((x) => x.id === id); return inv && inv.sobrantes[Number(i)]; })();
@@ -380,7 +380,7 @@
       <td><input name="marca" value="${esc(o.marca)}"></td><td><input name="modelo"></td><td><input name="serie" value="${esc(o.serie)}"></td><td><input name="color"></td><td><input name="medidas"></td>
       <td><select name="estado">${opciones(Core.ESTADOS_CONSERVACION, o.estado || 'Nuevo')}</select></td>
       <td><input name="valor" type="number" step="0.01" min="0"></td><td><input name="cuenta_contable"></td><td><input name="fecha_adquisicion" type="date"></td>
-      <td><input name="nro_orden"></td><td><select name="origen">${opciones(Object.entries(Core.ORIGENES), 'UE')}</select></td>
+      <td><input name="nro_orden"></td><td><select name="origen">${opciones(Object.entries(Core.ORIGENES).map(([k, v]) => [k, v.split(' —')[0].split(' (')[0]]), o.origen || 'CLAS')}</select></td>
       <td><select name="ubicacion">${opciones(opcUbic(true), o.ubicacion || 'ALMACEN GENERAL')}</select></td>
       <td><button type="button" class="btn chico peligro" data-quitar aria-label="Quitar fila">×</button></td></tr>`;
     };
@@ -560,7 +560,7 @@
     const bloqueados = m.detalle.filter((d) => {
       const b = S.porCodigo[d.codigo];
       if (!b) return true;
-      return Core.CAMPOS_TRAZABLES.some((k) => (b[k] || '') !== (d.despues[k] || ''));
+      return Core.CAMPOS_TRAZABLES.some((k) => k in d.despues && (b[k] || '') !== (d.despues[k] || ''));
     });
     if (bloqueados.length) {
       return modal(`<h2>No se puede anular</h2><div class="aviso warn">Estos bienes tienen actos posteriores. Anule primero los más recientes o registre un acto correctivo:<ul>
@@ -595,7 +595,7 @@
       ${puede.inventariar() && !abierto ? '<button class="btn primario" id="nuevo">Iniciar proceso</button>' : ''}</div>
       <div class="aviso info"><b>Inventario anual (art. 31):</b> cierre al 31 de diciembre, a cargo de una Comisión designada por resolución (representantes de OGA —quien la preside—, Contabilidad y Abastecimiento, art. 32).
       Fases: planificación, trabajo de campo y trabajo de gabinete (art. 35). Se presenta con el Informe Final (Anexo N° 06) y el Acta de Conciliación (Anexo N° 05) hasta el 15/03 (Organización) o el 31/03 (Entidad) (art. 36).<br>
-      <b>Supervisión (art. 94):</b> verificación periódica de existencia, ubicación, estado, condiciones de uso y asignación al usuario.</div>
+      <b>Supervisión (art. 94):</b> verificación periódica de existencia, ubicación, estado, condiciones de uso y asignación al usuario. La supervisión integral del Gobierno Regional a las CLAS es como mínimo semestral (D.S. N° 017-2008-SA, art. 103.d); el Gobierno Regional realiza además el inventario de los establecimientos (art. 79.f), para el cual este proceso es el insumo del CLAS.</div>
       <div class="tabla-wrap"><table><thead><tr><th>Código</th><th>Tipo</th><th>Año</th><th>Fecha de corte</th><th>Resolución</th><th>Verificados</th><th>Estado</th></tr></thead><tbody>
       ${S.inventarios.map((i) => `<tr class="click" onclick="location.hash='#/inventario/${esc(i.id)}'"><td class="mono">${esc(i.id)}</td><td>${i.tipo === 'SUPERVISION' ? 'Supervisión' : 'Inventario anual'}</td><td>${i.anio}</td><td>${fecha(i.fecha_corte)}</td>
         <td>${esc(i.resolucion)}</td><td>${Object.keys(i.verif || {}).length}</td><td>${i.estado === 'ABIERTO' ? '<span class="chip warn">En ejecución</span>' : '<span class="chip ok">Cerrado</span>'}${i.presentado ? ' <span class="chip info">Presentado</span>' : ''}</td></tr>`).join('') ||
@@ -892,8 +892,8 @@
         <div class="kpi"><div class="v">${enMant.length}</div><div class="l">Bienes fuera por mantenimiento</div></div>
         <div class="kpi"><div class="v">${conPoliza.length}</div><div class="l">Bienes con póliza registrada</div></div>
         <div class="kpi"><div class="v">${vencidas.length}</div><div class="l">Pólizas vencidas</div></div></div>
-      <div class="grid g2"><div class="tarjeta"><h2>Plan de Mantenimiento ${ref('Art. 86 · 6ª DCF')}</h2>
-        <p class="pequeno">Documento multianual (mínimo 3 años) aprobado por resolución de la OGA, obligatorio desde 2023. Contiene la clasificación de los bienes, el diagnóstico, el tipo y la frecuencia de mantenimiento, y el cronograma.</p>
+      <div class="grid g2"><div class="tarjeta"><h2>Plan de Mantenimiento ${ref('Directiva art. 86 · Reglamento CLAS art. 81.d')}</h2>
+        <p class="pequeno">Documento multianual (mínimo 3 años) aprobado por resolución de la OGA, obligatorio desde 2023. Contiene la clasificación de los bienes, el diagnóstico, el tipo y la frecuencia de mantenimiento, y el cronograma. Además, el Reglamento de la Ley N° 29124 obliga al CLAS a ejecutar un plan anual de mantenimiento de la infraestructura, los vehículos y los equipos (art. 81.d).</p>
         <p>${S.cfg.plan_mantenimiento ? '<span class="chip ok">Aprobado</span> ' + esc(S.cfg.plan_mantenimiento) : '<span class="chip warn">No registrado</span> Regístrelo en Configuración.'}</p></div>
         <div class="tarjeta"><h2>Plan de Aseguramiento ${ref('Arts. 89–90 · 6ª y 7ª DCF')}</h2>
         <p class="pequeno">Desde 2023 los bienes deben contar con póliza de seguro según el Plan de Aseguramiento. El usuario reporta todo siniestro a la OCP en 24 horas (art. 89.4). Registre la póliza en cada bien (Corregir datos).</p>
@@ -920,6 +920,12 @@
           <tr><td>Sin cuenta contable</td><td class="num">${k.sinCuentaContable}</td></tr><tr><td>Sin código interno</td><td class="num">${k.sinCodigoInterno}</td></tr>
           <tr><td>Sin número de serie</td><td class="num">${k.sinSerie}</td></tr><tr><td>Titularidad no determinada</td><td class="num">${k.origenNoDeterminado}</td></tr>
           <tr><td>Actos registrados después de 10 días hábiles (art. 23)</td><td class="num">${k.registrosExtemporaneos}</td></tr></tbody></table></div></div>
+      <div class="tarjeta"><h2>Informe de situación patrimonial ${ref('D.S. 017-2008-SA, arts. 36.n, 43.f, 49.c, 49.h y 104')}</h2>
+        <p class="pequeno muted">El Gerente informa mensualmente al Consejo Directivo y semestralmente a la Asamblea General (art. 49.c), presenta un diagnóstico dentro de los 60 días de asumir el cargo (art. 49.h) y rinde cuentas (art. 104).</p>
+        <div class="campos"><div class="campo"><label>Tipo de informe</label><select id="itipo">${opciones(Object.entries(Formatos.TIPOS_INFORME).map(([k, v]) => [k, `${v.titulo.split(' — ')[0].replace('INFORME ', '').toLowerCase()} — ${v.a} (${v.ref})`]), 'MENSUAL')}</select></div>
+        <div class="campo"><label>Desde</label><input type="date" id="idesde" value="${Core.hoyISO().slice(0, 8)}01"></div>
+        <div class="campo"><label>Hasta</label><input type="date" id="ihasta" value="${Core.hoyISO()}"></div></div>
+        <div class="barra" style="margin-top:.75rem"><button class="btn primario" id="isit">Imprimir informe</button></div></div>
       <div class="tarjeta"><h2>Fichas de asignación por usuario ${ref('Anexo N° 03')}</h2>
         ${porResp.length ? `<div class="tabla-wrap"><table><thead><tr><th>Usuario</th><th>Unidad</th><th class="num">Bienes</th><th class="num">Valor</th><th></th></tr></thead><tbody>
         ${porResp.map((x) => `<tr><td>${esc(x.p.nombres)}${x.p.activo ? '' : ' <span class="chip bad">Inactivo</span>'}</td><td>${esc(x.p.unidad || x.p.cargo)}</td><td class="num">${x.bienes.length}</td><td class="num">${soles(sumaValor(x.bienes))}</td>
@@ -951,6 +957,25 @@
     raiz.querySelectorAll('[data-p]').forEach((btn) => {
       btn.onclick = () => { const x = porResp.find((y) => y.p.id === btn.dataset.p); Formatos.imprimir(Formatos.relacionResponsable(x.p, x.bienes, ctx()), true); };
     });
+    const itipo = raiz.querySelector('#itipo');
+    itipo.onchange = () => { // propone el período según el tipo de informe
+      const h = Core.hoyISO(); const y = h.slice(0, 4); const m = Number(h.slice(5, 7));
+      raiz.querySelector('#idesde').value = itipo.value === 'MENSUAL' ? h.slice(0, 8) + '01' : itipo.value === 'DIAGNOSTICO' ? '' : (m <= 6 ? `${y}-01-01` : `${y}-07-01`);
+      raiz.querySelector('#ihasta').value = h;
+    };
+    raiz.querySelector('#isit').onclick = () => {
+      const tipo = itipo.value; const desde = val(raiz, '#idesde') || '0000-01-01'; const hasta = val(raiz, '#ihasta') || hoy;
+      const movs = S.movs.filter((m) => !m.anulado && m.fecha >= desde && m.fecha <= hasta).sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const vigentes = S.bienes.filter((b) => !['DISPUESTO', 'BAJA'].includes(b.situacion));
+      const titularidad = {};
+      vigentes.forEach((b) => { const x = titularidad[b.origen] = titularidad[b.origen] || { n: 0, v: 0 }; x.n++; x.v += Number(b.valor || 0); });
+      const mantos = movs.filter((m) => m.tipo === 'MANTENIMIENTO');
+      Formatos.imprimir(Formatos.informeSituacion(tipo, desde, hasta, {
+        indicadores: k, movs, titularidad, alertas: Core.alertasNormativas(S.bienes, S.movs, S.inventarios),
+        mantenimientos: mantos.length, costoMantenimiento: mantos.reduce((t, m) => t + Number(m.costo || 0), 0),
+        porTransferir: S.bienes.filter((b) => b.situacion !== 'DISPUESTO' && Core.ORIGENES_POR_TRANSFERIR.includes(b.origen))
+      }, ctx()));
+    };
   }
 
   // ---------------- Usuarios (servidores) y ubicaciones ----------------
@@ -1025,9 +1050,11 @@
     const t = N.informeSustento(S.cfg);
     marco(`<div class="barra"><h1>Marco normativo y sustento legal</h1><button class="btn primario" id="imp">Imprimir informe de sustento legal</button></div>
       <div class="tarjeta"><h2>Naturaleza del aplicativo</h2>${t.analisis.slice(0, 2).map((p) => `<p>${esc(p)}</p>`).join('')}</div>
-      <div class="tarjeta"><h2>Correspondencia con la Directiva N° 0006-2021-EF/54.01</h2><div class="tabla-wrap"><table><thead><tr><th>Módulo</th><th>Artículos</th><th>Formato</th><th>Control que aplica</th></tr></thead><tbody>
+      <div class="tarjeta"><h2>Correspondencia con la Directiva N° 0006-2021-EF/54.01 y el D.S. N° 017-2008-SA</h2><div class="tabla-wrap"><table><thead><tr><th>Módulo</th><th>Artículos</th><th>Formato</th><th>Control que aplica</th></tr></thead><tbody>
         ${N.MATRIZ.map((m) => `<tr><td><b>${esc(m[0])}</b></td><td>${esc(m[1])}</td><td>${esc(m[2])}</td><td>${esc(m[3])}</td></tr>`).join('')}</tbody></table></div></div>
-      <div class="tarjeta"><h2>Puntos de interpretación por definir con la Unidad Ejecutora</h2>
+      <div class="tarjeta"><h2>Reglamento de la Ley N° 29124 (D.S. N° 017-2008-SA): disposiciones sobre bienes</h2><div class="tabla-wrap"><table><thead><tr><th>Artículo</th><th>Contenido</th><th>Aplicación en el aplicativo</th></tr></thead><tbody>
+        ${N.REGLAMENTO_CLAS.map((r) => `<tr><td style="white-space:nowrap"><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="tarjeta"><h2>Puntos de interpretación por definir con la DIRESA / Unidad Ejecutora</h2>
         ${N.AMBIGUEDADES.map((a) => `<div class="aviso warn"><b>${esc(a[0])}.</b> ${esc(a[1])}</div>`).join('')}</div>
       <div class="tarjeta"><h2>Base legal</h2><div class="tabla-wrap"><table><tbody>
         ${N.BASE_LEGAL.map((b) => `<tr><td style="width:45%"><b>${esc(b[0])}</b></td><td>${esc(b[1])}</td></tr>`).join('')}</tbody></table></div></div>`);
@@ -1052,10 +1079,10 @@
     const usuarios = await DB.todos('usuarios');
     const c = S.cfg;
     const campos = [['entidad', 'Entidad u Organización'], ['sigla', 'Siglas (etiquetas)'], ['establecimiento', 'Establecimiento'], ['direccion', 'Dirección del local'],
-      ['ubigeo', 'Distrito — provincia — departamento'], ['red', 'Unidad Ejecutora / Red'], ['ruc', 'RUC'], ['jefe', 'Jefe(a) / Gerente del CLAS'],
+      ['ubigeo', 'Distrito — provincia — departamento'], ['red', 'Unidad Ejecutora / Red'], ['ruc', 'RUC'], ['jefe', 'Gerente del CLAS / jefe del establecimiento (Reglamento, arts. 48–49)'], ['presidente_cd', 'Presidente(a) del Consejo Directivo (Reglamento, art. 44)'],
       ['oga_nombre', 'OGA: oficina o cargo (art. 4.1.h)'], ['oga_responsable', 'OGA: responsable'], ['responsable_patrimonio', 'Responsable de Control Patrimonial (OCP)'],
       ['responsable_patrimonio_dni', 'DNI del responsable de la OCP'], ['responsable_contabilidad', 'Responsable de Contabilidad'],
-      ['plan_mantenimiento', 'Plan de Mantenimiento: resolución (art. 86)'], ['plan_aseguramiento', 'Plan de Aseguramiento: resolución (art. 90)'],
+      ['plan_mantenimiento', 'Plan de Mantenimiento: documento (Directiva art. 86; plan anual, Reglamento art. 81.d)'], ['plan_aseguramiento', 'Plan de Aseguramiento: resolución (art. 90)'],
       ['uit', 'Valor UIT (S/)'], ['uit_anio', 'Año de la UIT']];
     marco(`<div class="barra"><h1>Configuración</h1></div>
       <div class="tarjeta"><h2>Datos institucionales y responsables</h2><form id="fc"><div class="campos">

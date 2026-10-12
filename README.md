@@ -81,3 +81,9 @@ Pasos, una vez reunida la lista de correos del personal autorizado:
 Documentos protegidos por derecho de autor (D. Leg. N° 822, Perú).
 Uso estrictamente institucional. Portal elaborado por Lic. Adm. Ricardo A.
 Agüero Angulo, Área de Administración del CLAS Agregado La Querencia.
+
+## Aplicativo de Gestión de Inventario
+
+La carpeta [`gestion-inventario/`](gestion-inventario/README.md) contiene el aplicativo de
+gestión de bienes muebles patrimoniales (registro, movimientos, formatos, toma de inventario).
+Es autocontenido y se publica en `…/gestion-inventario/`.

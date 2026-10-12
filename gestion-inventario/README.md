@@ -41,46 +41,32 @@ Esa trazabilidad es lo que exigen la normativa y el control posterior (OCI / Con
 **Fuera de alcance (v1):** depreciación contable, integración con SIGA-MEF / SINABIP,
 bienes inmuebles, firma digital.
 
-## 3. Normativa aplicada y ambigüedades
+## 3. Normativa aplicada y sustento legal
 
-| Norma | Uso en el aplicativo |
-|---|---|
-| D.Leg. N° 1439, Sistema Nacional de Abastecimiento, y su Reglamento, D.S. N° 217-2019-EF | Marco general de la gestión de bienes muebles. |
-| Directiva N° 0006-2021-EF/54.01, "Directiva para la Gestión de Bienes Muebles Patrimoniales en el marco del SNA" (R.D. N° 0015-2021-EF/54.01) | Tipos de acto, causales de baja, actos de disposición, asignación en uso, inventario. |
-| D.S. N° 009-2019-MINAM, régimen de RAEE | Estado "RAEE" y disposición mediante operador autorizado. |
-| Ley N° 29124 (CLAS) y su reglamento, D.S. N° 017-2008-SA | Co-gestión; contexto del origen de los bienes. |
-| Ley N° 27444, TUO D.S. N° 004-2019-JUS | Sustento documental de cada acto. |
+El aplicativo implementa la **Directiva N° 0006-2021-EF/54.01** (R.D. N° 0015-2021-EF/54.01, DGA-MEF), en el marco del
+D.Leg. N° 1439 y del D.S. N° 217-2019-EF. Desde el D.Leg. N° 1439, la rectoría sobre bienes **muebles** corresponde a
+la DGA-MEF, no a la SBN.
 
-**Puntos que debe validar con la Unidad de Control Patrimonial de la Unidad Ejecutora
-(Red de Salud Huaral–Chancay / DIRESA Lima) antes de usar el aplicativo como registro oficial:**
+- Sustento legal completo, matriz módulo ↔ artículo ↔ anexo y puntos por definir: [`docs/SUSTENTO_LEGAL.md`](docs/SUSTENTO_LEGAL.md).
+- Dentro del aplicativo: **Marco normativo → Imprimir informe de sustento legal**.
 
-1. **SBN vs. DGA-MEF.** Con el D.Leg. 1439, la rectoría sobre los **bienes muebles**
-   pasó de la SBN a la Dirección General de Abastecimiento del MEF; hoy la SBN se
-   ocupa principalmente de los inmuebles. El aplicativo sigue la Directiva
-   0006-2021-EF/54.01. **Verifique si existen modificatorias posteriores**: no pude
-   confirmar desde este entorno si hubo cambios después de 2021.
-2. **Propiedad de los bienes del CLAS.** El CLAS es una asociación civil privada sin fines
-   de lucro que administra recursos públicos. No queda claro, y debe definirse, cuáles bienes son
-   del Estado (afectados en uso por la UE y registrados en su SIGA) y cuáles son
-   propiedad del CLAS (adquiridos con recursos propios o transferencias). Por eso el
-   campo **Origen** está en "No determinado" para los 537 bienes y genera una alerta.
-3. **Plazos del inventario anual** (fecha de corte y fecha de remisión del informe): no
-   están fijados en el sistema. Regístrelos según la directiva y el cronograma de la UE.
-4. **Umbral contable de 1/4 UIT** (activo fijo vs. cuentas de orden): es un criterio
-   contable referencial. La UIT se configura (por defecto **S/ 5,350, UIT 2025**).
-   **Actualícela con el valor vigente de 2026.**
-5. **Numeración y nombre de los anexos oficiales.** Los formatos imprimibles siguen el
-   contenido que exige la directiva, pero **no reproducen la numeración de sus anexos**.
-   Si la UE exige su propio modelo, ajuste `js/formatos.js`.
+**Principales ambigüedades (detalle en el documento):**
+- El CLAS no es una Entidad del SNA (art. 3).
+- El registro oficial es el SIGA MEF de la UE (arts. 21 y 23).
+- Falta definir quién actúa como OGA y como OCP.
+- El plazo de presentación del inventario puede ser el 15/03 o el 31/03.
+- Hay que verificar las modificatorias posteriores a 2021.
+- La UIT por defecto es la de 2025 (S/ 5,350): actualícela.
 
 ## 4. Arquitectura
 
 ```
 Navegador (Chrome / Edge / Firefox)
  ├─ index.html + css/app.css          Interfaz (responsive, modo oscuro)
- ├─ js/core.js     Reglas de negocio puras (validaciones, transiciones, inventario, KPIs) ← probado con node --test
+ ├─ js/core.js     Reglas de la Directiva: catálogos, validaciones, transiciones, inventario, plazos ← probado con node --test
+ ├─ js/normativa.js Sustento legal, base legal, matriz módulo↔artículo, ambigüedades
  ├─ js/db.js       IndexedDB: datos, usuarios (SHA-256 iterado con sal), bitácora, respaldo
- ├─ js/formatos.js Formatos A4 imprimibles / PDF
+ ├─ js/formatos.js Anexos N° 01, 02, 03, 04, 05, 06, 07, 09, Apéndice A, etiquetas, informe de sustento
  ├─ js/app.js      Vistas, rutas (#/...), permisos por rol
  └─ lib/xlsx.full.min.js  SheetJS 0.18.5 (importar/exportar Excel, sin internet)
 ```
@@ -94,50 +80,37 @@ base de datos. Una aplicación 100 % cliente:
 **Su límite:** los datos viven en **un solo navegador de una sola PC**. Sirve para una sola
 persona responsable de Control Patrimonial. Para uso multiusuario ver el roadmap (§10).
 
-## 5. Módulos y funcionalidades
+## 5. Módulos (organizados por Títulos de la Directiva)
 
-| Módulo | Funcionalidad |
-|---|---|
-| Panel | KPIs (bienes, valor, activo fijo / cuentas de orden), alertas, gráficos por estado y ubicación, últimos movimientos. |
-| Bienes | Búsqueda y filtros; ficha con kardex; edición **solo de datos descriptivos**, con motivo obligatorio en la bitácora; exportación a Excel. |
-| Movimientos | 9 actos manuales y 1 automático (inventario). Validaciones por situación del bien, correlativo `PREF-AAAA-NNNN`, formato imprimible, anulación con reversión. |
-| Toma de inventario | Campaña con comisión y fecha de corte; verificación por ubicación; sobrantes; cierre con regularización automática e informe. |
-| Reportes | Inventario completo, resumen por ubicación, candidatos a baja, calidad de datos y relación de bienes por servidor (para cese o rotación). |
-| Personal y ubicaciones | Maestros. No permite desactivar a un servidor que aún tiene bienes asignados. |
-| Bitácora | Ingresos, intentos fallidos, ediciones, movimientos, anulaciones, cargas y restauraciones. |
-| Configuración | Datos institucionales, UIT, carga del inventario, respaldo y restauración, usuarios y roles. |
-
-### Reglas de los actos (máquina de estados del bien)
-
-```
-           ALTA
-            │
-            ▼
-  ┌──── ACTIVO ◄──── REINGRESO ──── EN_SALIDA
-  │  (asignación, devolución,          ▲
-  │   desplazamiento, cambio de estado)│
-  │         │ SALIDA ──────────────────┘
-  │         │
-  │ inventario (no hallado)
-  ▼         ▼
-FALTANTE ─► BAJA ──► DISPOSICIÓN ──► DISPUESTO
-```
-
-| Acto | Desde | Obligatorio |
+| Menú | Título / artículos | Qué hace |
 |---|---|---|
-| Alta | — | causal, documento; código de 12 dígitos no repetido; valor > 0 |
-| Asignación en uso | Activo | servidor que recibe |
-| Devolución | Activo con responsable | motivo |
-| Desplazamiento | Activo | ubicación de destino |
-| Salida temporal | Activo | motivo, destino, fecha de retorno ≥ fecha de salida |
-| Reingreso | En salida | — |
-| Cambio de estado | Activo / En salida | nuevo estado, motivo |
-| Baja | Activo / Faltante | causal, resolución, motivo (además libera la custodia) |
-| Disposición | Baja | modalidad, resolución, beneficiario |
+| Panel | — | KPIs y **alertas de plazos**: disposición a 5 meses (50.1), asignación a 20 días hábiles (26.2), registro a 10 días hábiles (23), vencimiento de afectaciones (56), salidas vencidas, inventario anual (31, 36), faltantes (44–46). |
+| Bienes / Etiquetas | Tít. III, arts. 19–25 | Registro, kardex y corrección de datos. Cambiar el valor exige resolución (art. 25). Etiquetas con código y entidad, o con año de inventario (35.3.d). |
+| Registrar acto | Tít. III–IX | 12 actos con sus causales, requisitos condicionados por causal y su formato (ver tabla). Borrador del Informe Técnico (Anexo N° 01) antes de la resolución. |
+| Historial de actos | — | Número correlativo, sustento y anulación de registro erróneo (art. 24). |
+| Inventario y supervisión | Tít. V y X | Comisión por resolución (32). Fases: planificación (plan, contraste de usuarios), campo (Anexo N° 07; uso/desuso; física/digital; sobrantes), gabinete (conciliación, Anexo N° 05; informe, Anexo N° 06), cierre con regularización y presentación (Anexo N° 09). |
+| Saneamiento | Tít. VI | Faltantes → baja por saneamiento o sustracción. Sobrantes → evaluación del año de posesión (39), excepción para RAEE y chatarra (43), alta. |
+| Mantenimiento y seguros | Tít. IX | Registro de mantenimientos por tipo (84), salidas para mantenimiento (87), planes (86, 90) y pólizas (89). |
+| Marco normativo | — | Sustento legal, matriz y ambigüedades. |
 
-**Anulación:** solo el Administrador puede anular, y solo si ningún bien tuvo movimientos
-posteriores. El sistema revierte los bienes a su estado anterior y conserva el movimiento
-marcado como anulado.
+### Actos y reglas
+
+| Acto | Desde | Requisitos | Formato |
+|---|---|---|---|
+| Alta | — | Causal del art. 16.1 (o compra con PECOSA, 21.3) y documento (17.1). Donación, reposición, permuta, saneamiento u otra causal: además informe técnico y resolución. Código de 12 dígitos no repetido (20.3). | Anexo N° 02 o ficha de alta + Apéndice A |
+| Asignación en uso | Activo | Usuario y modalidad sede o teletrabajo (27) | Anexo N° 03 |
+| Devolución | Activo con usuario | Motivo; estado verificado (29.3.c) | Anexo N° 03 (una ficha por usuario) |
+| Desplazamiento interno | Activo | Ubicación de destino | Anexo N° 04 |
+| Salida / Reingreso | Activo / En salida | Motivo (mantenimiento, comisión de servicios, capacitación), documento que autoriza, responsable del traslado, destino y retorno; tipo de mantenimiento (84) | Anexo N° 04 |
+| Mantenimiento | Activo / En salida | Tipo (84) y trabajos realizados | Constancia |
+| Estado de conservación | Activo / En salida / Afectado | Nuevo estado y sustento | Acta de constatación |
+| Baja | Activo / Faltante | Causal del art. 48.1, informe técnico y resolución (49.1). RAEE y chatarra: el bien debe tener ese estado. Sustracción: denuncia. Faltantes: solo saneamiento o sustracción. | Anexo N° 01 + relación |
+| Afectación en uso | Activo | Afectataria, informe técnico, finalidad, plazo máximo de 1 año (56.1) | Anexo N° 02 |
+| Extinción de afectación | Afectado | Causal (58) y resolución | Anexo N° 02 |
+| Disposición | Baja | Modalidad (61), informe técnico, resolución y beneficiario. Subasta y permuta: tasación. RAEE: no se elimina (8ª DCF). | Anexo N° 02 |
+
+Situaciones del bien: Activo → En salida / Afectado / Faltante → Baja → Excluido del patrimonio. La baja por saneamiento de
+faltantes excluye el bien sin acto de disposición (art. 60.3).
 
 ## 6. Modelo de datos (IndexedDB)
 
@@ -161,31 +134,36 @@ reconstruye el kardex y se hace la anulación sin ambigüedad.
    (`python -m http.server` dentro de esta carpeta → `http://localhost:8000`).
    Si abre el archivo con doble clic, la carga del inventario incluido no funciona; use "Importar Excel".
 2. **Primer ingreso:** usuario `admin`, clave `admin`. El sistema obliga a cambiarla.
-3. **Configuración:** complete jefe(a), responsable de Control Patrimonial y UIT vigente. Luego
-   pulse **"Cargar inventario 2025 incluido"** (o importe su Excel con las mismas columnas).
-4. **Personal y ubicaciones:** registre a los servidores (DNI, cargo, condición) y unifique las ubicaciones.
-5. **Asignación en uso:** Movimientos → *Asignación en uso* → elija al servidor, filtre por
+3. **Configuración:** complete los datos y responsables (jefe(a), OGA, OCP, Contabilidad, dirección), los planes de
+   mantenimiento y aseguramiento y la UIT vigente. Luego pulse **"Cargar inventario 2025 incluido"**.
+4. **Marco normativo:** imprima el **informe de sustento legal** y tramite su aprobación ante la Gerencia del CLAS, con copia a la OCP de la UE.
+5. **Usuarios y ubicaciones:** registre a los usuarios (DNI, correo, unidad, condición) y unifique las ubicaciones.
+6. **Asignación en uso (Anexo N° 03):** Registrar acto → *Asignación en uso* → elija al usuario y la modalidad, filtre por
    ubicación, marque los bienes → Registrar → **Imprimir formato** → recoja las firmas → archive.
-6. **Salidas:** registre una *Salida temporal* antes de que el bien deje la sede; al volver,
-   registre el *Reingreso*. Las salidas vencidas aparecen en el Panel.
-7. **Baja:** cuando ya tenga la resolución, registre *Baja* con la causal. Luego registre la
-   *Disposición* (donación, RAEE, etc.).
-8. **Inventario:** Toma de inventario → *Iniciar* → recorra cada ubicación marcando
-   Sí/No y corrigiendo estado, ubicación o responsable → registre los sobrantes → *Cerrar* →
-   *Imprimir informe*. Los faltantes pasan a situación "Faltante". Los sobrantes se
-   incorporan después con un *Alta* por "Sobrante de inventario".
-9. **Respaldo:** Configuración → *Descargar respaldo* **cada semana** y después de cada inventario.
+7. **Salidas (Anexo N° 04):** registre la *Salida* antes de que el bien deje la sede (motivo, autorización, responsable,
+   destino, retorno). Al volver, registre el *Reingreso*.
+8. **Baja (arts. 47–49):** en el formulario de *Baja*, imprima el **borrador del Informe Técnico**, tramite la resolución y,
+   cuando la tenga, registre la baja con su número. Dentro de los 5 meses siguientes, registre la *Disposición*.
+9. **Inventario (Título V):** Inventario y supervisión → *Iniciar* (resolución y comisión) → planificación → trabajo de campo
+   por ubicación (Anexo N° 07) → gabinete (Anexos N° 05 y 06) → *Cerrar y regularizar* → presentación (Anexo N° 09).
+10. **Saneamiento (Título VI):** los faltantes se dan de baja por saneamiento o sustracción. Los sobrantes con 1 año de
+    posesión se incorporan con *Alta* desde esta pantalla.
+11. **Respaldo:** Configuración → *Descargar respaldo* **cada semana** y después de cada inventario.
 
-Roles: **Administrador** (todo), **Control Patrimonial** (registra bienes, movimientos e
-inventario), **Consulta** (ve, exporta e imprime).
+Roles:
+- **Administrador:** todo.
+- **Control Patrimonial (OCP):** registra bienes y actos.
+- **Comisión de Inventario:** ejecuta inventarios y supervisiones.
+- **Consulta (OGA / Jefatura):** ve, exporta e imprime.
 
 ## 8. Plan de pruebas
 
-- **Unitarias** (reglas de negocio y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 11 pruebas.
-- **Funcionales (verificadas en Chromium):** primer ingreso y cambio de clave; carga de 537
-  bienes (S/ 671,562.58); alta de personal; asignación de 20 bienes y formato impreso; validación
-  de una salida incompleta; baja y su anulación con reversión; inventario con un faltante y
-  una diferencia, cierre e informe; vista móvil de 390 px sin desplazamiento horizontal; bitácora.
+- **Unitarias** (reglas de la Directiva, plazos, inventario y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 18 pruebas.
+- **Funcionales (verificadas en Chromium):** carga de 537 bienes; asignación de 20 bienes (Anexo N° 03); salida
+  incompleta rechazada; baja de 4 bienes con borrador e Informe Técnico (Anexo N° 01); disposición por donación (Anexo N° 02)
+  y su anulación; inventario anual sin resolución rechazado; inventario con faltante, diferencia, uso/desuso y sobrante;
+  Anexos N° 07, 05, 06 y 09; alta del sobrante desde Saneamiento; etiquetas; informe de sustento legal; vista móvil sin
+  desplazamiento horizontal; sin errores de consola.
 - **Pendiente de prueba con usuarios reales:** impresión física en A4 y lectura del formato por la UE.
 
 ## 9. Seguridad: lo que hace y lo que **no** hace

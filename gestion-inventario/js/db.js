@@ -55,12 +55,20 @@
   // ---------------- Configuración ----------------
   const CONFIG_DEFECTO = {
     entidad: 'CLAS AGREGADO LA QUERENCIA',
+    sigla: 'CLAS LA QUERENCIA',
     establecimiento: 'CENTRO DE SALUD CLAS QUERENCIA',
+    direccion: '',
     ubigeo: 'Huaral — Huaral — Lima',
     red: 'Red de Salud Huaral – Chancay / DIRESA Lima',
     ruc: '',
     jefe: '',
+    oga_nombre: 'Oficina de Administración de la Unidad Ejecutora',
+    oga_responsable: '',
     responsable_patrimonio: '',
+    responsable_patrimonio_dni: '',
+    responsable_contabilidad: '',
+    plan_mantenimiento: '',
+    plan_aseguramiento: '',
     uit: 5350,
     uit_anio: 2025
   };

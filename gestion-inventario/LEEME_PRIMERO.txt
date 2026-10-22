@@ -1,0 +1,37 @@
+﻿GESTIÓN DE INVENTARIO — CLAS AGREGADO LA QUERENCIA (versión 2)
+Bienes muebles patrimoniales · Directiva N° 0006-2021-EF/54.01 · D.S. N° 017-2008-SA
+=====================================================================================
+
+OPCIÓN A — USO INMEDIATO EN UNA PC (sin instalar nada)
+  1. Descomprima la carpeta en la PC (por ejemplo, en Documentos).
+  2. Haga doble clic en "index.html". Se abre en Google Chrome o Microsoft Edge.
+  3. Ingrese con usuario: admin   clave: admin
+     El sistema le pedirá una clave nueva (mínimo 8 caracteres, con letras y números).
+  4. Vaya a Configuración:
+     - complete los datos institucionales y los responsables;
+     - pulse "Cargar inventario 2025 incluido" (537 bienes).
+  5. Para empezar a trabajar, siga el Manual de usuario (README.md, sección 7).
+
+  IMPORTANTE en esta opción:
+  - Los datos se guardan SOLO en el navegador de esa PC. No use el modo incógnito.
+    No borre los "datos de navegación" del navegador.
+  - Descargue un respaldo cada semana: Configuración > Descargar respaldo.
+    Guárdelo en una USB o una carpeta institucional.
+  - Úsela con un solo operador. Para varios usuarios, use la opción B.
+
+OPCIÓN B — VERSIÓN MULTIUSUARIO EN INTERNET (producción)
+  Plataforma: Cloudflare Workers + D1 + R2. Costo aproximado: USD 5 al mes (plan Workers Paid).
+  La instala una persona con conocimientos técnicos, en unos 15 minutos, siguiendo:
+      docs/MANUAL_TECNICO.md  (sección 6: Despliegue)
+  Requiere: la cuenta de Cloudflare del CLAS y Node.js 20 o superior.
+
+DOCUMENTOS INCLUIDOS
+  README.md ................. Análisis, módulos, manual de usuario, roadmap y riesgos
+  docs/SUSTENTO_LEGAL.md .... Sustento legal y puntos por definir con la DIRESA/UE
+  docs/MANUAL_TECNICO.md .... Plataforma, arquitectura, seguridad, despliegue y costos
+  Dentro del aplicativo: Marco normativo > "Imprimir informe de sustento legal"
+
+PUNTOS PENDIENTES DE DEFINIR (ver docs/SUSTENTO_LEGAL.md)
+  - Titularidad de los bienes y transferencia anual al Gobierno Regional (arts. 63.d y 68.d del D.S. 017-2008-SA).
+  - Protección de datos personales si usa la opción B (Ley N° 29733).
+  - UIT 2026: actualícela en Configuración.

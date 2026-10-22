@@ -1043,6 +1043,15 @@
     raiz.querySelector('#exp').onclick = () => descargarExcel(`bitacora_${Core.hoyISO()}.xlsx`, { Bitacora: reg });
   }
 
+  /** Inventario 2025 incluido: por red (servidor) o por script (al abrir el archivo con doble clic) */
+  async function cargarSemilla() {
+    try { const r = await fetch('data/inventario-2025.json'); if (r.ok) return await r.json(); } catch (e) { /* file:// */ }
+    if (!window.SEMILLA_INVENTARIO_2025) {
+      await new Promise((ok, mal) => { const sc = document.createElement('script'); sc.src = 'data/inventario-2025.js'; sc.onload = ok; sc.onerror = mal; document.head.appendChild(sc); });
+    }
+    return window.SEMILLA_INVENTARIO_2025;
+  }
+
   // ---------------- Configuración ----------------
   async function vistaConfig() {
     if (!puede.administrar()) return marco('<div class="aviso bad">Acceso restringido.</div>');
@@ -1082,10 +1091,10 @@
     };
     raiz.querySelector('#semilla').onclick = async () => {
       try {
-        const filas = await (await fetch('data/inventario-2025.json')).json();
+        const filas = await cargarSemilla();
         const r = await R.cargaInicial(filas, 'INVENTARIO_CLAS_QUERENCIA_2025.xlsx');
         await recargar(); toast(`${r.cargados} bienes cargados; ${r.omitidos} omitidos.`); vistaConfig();
-      } catch (err) { toast('No se pudo leer el archivo incluido. Si abrió la app con doble clic, use "Importar Excel".'); }
+      } catch (err) { toast('No se pudo leer el inventario incluido. Use "Importar Excel".'); }
     };
     raiz.querySelector('#xls').onchange = async (e) => {
       const f = e.target.files[0]; if (!f) return;

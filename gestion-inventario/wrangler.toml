@@ -1,0 +1,37 @@
+# =====================================================================
+# Gestión de Inventario — CLAS Agregado La Querencia
+# Plataforma: Cloudflare Workers + D1 + R2 (ver docs/MANUAL_TECNICO.md)
+# =====================================================================
+name = "gestion-inventario-clas"
+main = "api/index.js"
+compatibility_date = "2025-09-01"
+
+# Interfaz web (archivos estáticos de esta carpeta, filtrados por .assetsignore)
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+# Base de datos SQL. Crear con:  npx wrangler d1 create gestion-inventario
+# y reemplazar database_id por el que devuelve el comando.
+[[d1_databases]]
+binding = "DB"
+database_name = "gestion-inventario"
+database_id = "REEMPLAZAR_CON_ID_DE_D1"
+migrations_dir = "migrations"
+
+# Documentos firmados y respaldos. Crear con:  npx wrangler r2 bucket create gestion-inventario-archivos
+[[r2_buckets]]
+binding = "ARCHIVOS"
+bucket_name = "gestion-inventario-archivos"
+
+# Respaldo automático: lunes 08:00 UTC (03:00 hora de Lima)
+[triggers]
+crons = ["0 8 * * 1"]
+
+[observability]
+enabled = true
+
+# Secretos (no se escriben aquí):
+#   npx wrangler secret put JWT_SECRETO     -> cadena aleatoria de 64+ caracteres
+#   npx wrangler secret put ADMIN_INICIAL   -> clave temporal del primer usuario "admin"

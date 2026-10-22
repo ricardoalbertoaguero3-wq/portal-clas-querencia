@@ -17,17 +17,24 @@
     administrar: () => S.usuario.rol === 'ADMIN'
   };
 
-  const S = { usuario: null, cfg: null, bienes: [], porCodigo: {}, movs: [], personal: [], ubic: [], inventarios: [] };
+  const S = { usuario: null, cfg: null, bienes: [], porCodigo: {}, movs: [], personal: [], ubic: [], inventarios: [], adjuntos: [] };
+  let R = null; // capa de datos: Repo servidor o local (ver repo.js)
+  /** Ejecuta una operación del repositorio y muestra los errores de negocio */
+  async function intentar(fn, alError) {
+    try { return await fn(); } catch (e) { if (alError) alError(e); else toast((e.errores && e.errores.join(' ')) || e.message); return undefined; }
+  }
   const ORIGEN_ANTERIOR = { PROPIO: 'CLAS', AFECTADO: 'AFECTACION', TRANSFERENCIA: 'UE' };
 
   async function recargar() {
-    S.cfg = await DB.config();
-    S.bienes = (await DB.todos('bienes')).map((b) => (ORIGEN_ANTERIOR[b.origen] ? Object.assign(b, { origen: ORIGEN_ANTERIOR[b.origen] }) : b));
+    const d = await R.cargarEstado();
+    S.cfg = d.config;
+    S.bienes = d.bienes.map((b) => (ORIGEN_ANTERIOR[b.origen] ? Object.assign(b, { origen: ORIGEN_ANTERIOR[b.origen] }) : b));
     S.porCodigo = Object.fromEntries(S.bienes.map((b) => [b.codigo, b]));
-    S.movs = (await DB.todos('movimientos')).sort((a, b) => (b.registrado || '').localeCompare(a.registrado || ''));
-    S.personal = (await DB.todos('personal')).sort((a, b) => a.nombres.localeCompare(b.nombres));
-    S.ubic = (await DB.todos('ubicaciones')).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    S.inventarios = (await DB.todos('inventarios')).sort((a, b) => b.id.localeCompare(a.id));
+    S.movs = d.movimientos.sort((a, b) => (b.registrado || '').localeCompare(a.registrado || ''));
+    S.personal = d.personal.sort((a, b) => a.nombres.localeCompare(b.nombres));
+    S.ubic = d.ubicaciones.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    S.inventarios = d.inventarios.sort((a, b) => b.id.localeCompare(a.id));
+    S.adjuntos = d.adjuntos || [];
   }
   const persona = (id) => S.personal.find((x) => x.id === id) || (id ? { nombres: id } : {});
   const nombrePersona = (id) => persona(id).nombres || '';
@@ -100,7 +107,7 @@
       <div class="marca">Gestión de Inventario<small>${esc(S.cfg.entidad)}</small><small>Directiva N° 0006-2021-EF/54.01</small></div>
       ${MENU.filter((m) => m[2] !== 'admin' || puede.administrar()).map((m) => m.length === 1 ? `<div class="nav-sec">${m[0]}</div>`
         : `<a href="${m[0]}" class="${ruta === m[0] ? 'activo' : ''}">${m[1]}${m[3] ? `<span class="nav-ref">${m[3]}</span>` : ''}</a>`).join('')}
-      <div class="usuario">${esc(S.usuario.nombre)}<br>${ROLES[S.usuario.rol]}<br>
+      <div class="usuario">${esc(S.usuario.nombre)}<br>${ROLES[S.usuario.rol]}<br><span class="chip ${R.modo === 'servidor' ? 'ok' : 'warn'}" title="Dónde se guardan los datos">${esc(R.descripcion)}</span><br>
         <a href="#" id="clave" style="padding:0;display:inline">Cambiar clave</a> · <a href="#" id="salir" style="padding:0;display:inline">Salir</a></div>
       </nav><main class="main"><button class="btn menu-movil" id="menu" aria-label="Abrir menú">☰ Menú</button>${contenido}</main></div>`;
     raiz.querySelector('#menu').onclick = () => raiz.querySelector('#nav').classList.toggle('abierto');
@@ -116,25 +123,22 @@
       <div class="campo"><label for="u">Usuario</label><input id="u" autocomplete="username" required></div>
       <div class="campo" style="margin-top:.6rem"><label for="p">Clave</label><input id="p" type="password" autocomplete="current-password" required></div>
       <button class="btn primario" style="margin-top:1rem;width:100%;justify-content:center">Ingresar</button>
-      <p class="muted pequeno" style="margin-top:1rem">Primer ingreso: usuario <b>admin</b>, clave <b>admin</b> (se pedirá cambiarla).</p></form></div>`;
+      <p class="muted pequeno" style="margin-top:1rem">${R.modo === 'servidor' ? 'Servidor institucional. Solicite su usuario al administrador del sistema.'
+        : 'Modo local (datos en este navegador). Primer ingreso: usuario <b>admin</b>, clave <b>admin</b> (se pedirá cambiarla).'}</p></form></div>`;
     raiz.querySelector('#f').onsubmit = async (e) => {
       e.preventDefault();
-      const u = await DB.verificarUsuario(val(raiz, '#u'), raiz.querySelector('#p').value);
-      if (!u) {
-        await DB.escribir([DB.opBitacora(val(raiz, '#u'), 'LOGIN_FALLIDO', '')]);
-        return pantallaLogin('Usuario o clave incorrectos.');
-      }
+      const u = await intentar(() => R.ingresar(val(raiz, '#u'), raiz.querySelector('#p').value), (err) => pantallaLogin((err.errores || [err.message]).join(' ')));
+      if (!u) return;
       S.usuario = u;
-      sessionStorage.setItem('gi_usuario', u.usuario);
-      await DB.escribir([DB.opBitacora(u.usuario, 'LOGIN', '')]);
-      if (u.debeCambiar) dialogoClave(true); else enrutar();
+      if (u.debeCambiar) return dialogoClave(true);
+      await recargar(); enrutar();
     };
   }
-  function salir() { sessionStorage.removeItem('gi_usuario'); S.usuario = null; location.hash = ''; pantallaLogin(); }
+  async function salir() { await R.salir(); S.usuario = null; location.hash = ''; pantallaLogin(); }
 
   function dialogoClave(obligatorio) {
     modal(`<h2>Cambiar clave</h2>${obligatorio ? '<div class="aviso warn">Debe cambiar la clave inicial antes de continuar.</div>' : ''}
-      <form id="fc"><div class="campos"><div class="campo"><label>Nueva clave (mín. 8 caracteres)</label><input type="password" id="c1" minlength="8" required></div>
+      <form id="fc"><div class="campos"><div class="campo"><label>Nueva clave (mín. 8 caracteres, con letras y números)</label><input type="password" id="c1" minlength="8" required></div>
       <div class="campo"><label>Repetir clave</label><input type="password" id="c2" minlength="8" required></div></div>
       <div class="barra" style="margin-top:1rem"><button class="btn primario">Guardar</button>${obligatorio ? '' : '<button type="button" class="btn" data-cerrar>Cancelar</button>'}</div></form>`,
     (m, cerrar) => {
@@ -142,9 +146,8 @@
         e.preventDefault();
         const c1 = m.querySelector('#c1').value;
         if (c1 !== m.querySelector('#c2').value) return toast('Las claves no coinciden.');
-        await DB.cambiarClave(S.usuario.usuario, c1);
-        await DB.escribir([DB.opBitacora(S.usuario.usuario, 'CAMBIO_CLAVE', '')]);
-        S.usuario.debeCambiar = false; cerrar(); toast('Clave actualizada.'); enrutar();
+        if ((await intentar(() => R.cambiarClave(c1).then(() => true))) !== true) return;
+        S.usuario.debeCambiar = false; cerrar(); toast('Clave actualizada.'); await recargar(); enrutar();
       };
     });
   }
@@ -259,19 +262,11 @@
     (m, cerrar) => {
       m.querySelector('#fe').onsubmit = async (e) => {
         e.preventDefault();
-        const fd = new FormData(e.target); const nuevo = Object.assign({}, b); const cambios = [];
-        [...campos.map((c) => c[0]), 'poliza_vence', 'origen', 'observaciones'].forEach((k) => {
-          const v = Core.limpiar(fd.get(k)); if (v !== (b[k] || '')) { cambios.push(`${k}: "${b[k] || ''}" → "${v}"`); nuevo[k] = v; }
-        });
-        const valor = Core.aNumero(fd.get('valor'));
-        if (valor !== Number(b.valor)) {
-          if (!Core.limpiar(fd.get('_resolucion'))) { m.querySelector('#err').innerHTML = '<div class="aviso bad">La modificación del valor requiere la resolución de la OGA, sustentada en un informe técnico (art. 25).</div>'; return; }
-          if (!(valor > 0)) { m.querySelector('#err').innerHTML = '<div class="aviso bad">El valor debe ser mayor a 0.</div>'; return; }
-          cambios.push(`valor: ${b.valor} → ${valor} (${Core.limpiar(fd.get('_resolucion'))}, art. 25)`); nuevo.valor = valor;
-        }
-        if (!cambios.length) return cerrar();
-        nuevo.actualizado = new Date().toISOString();
-        await DB.escribir([{ store: 'bienes', valor: nuevo }, DB.opBitacora(S.usuario.usuario, 'CORRECCION_REGISTRO', `${b.codigo} — ${fd.get('_motivo')} — ${cambios.join('; ')}`)]);
+        const fd = new FormData(e.target); const cambios = {};
+        [...campos.map((c) => c[0]), 'poliza_vence', 'origen', 'observaciones', 'valor'].forEach((k) => { cambios[k] = fd.get(k); });
+        const ok = await intentar(() => R.corregirBien(b.codigo, cambios, Core.limpiar(fd.get('_motivo')), Core.limpiar(fd.get('_resolucion'))).then(() => true),
+          (err) => { m.querySelector('#err').innerHTML = `<div class="aviso bad">${esc((err.errores || [err.message]).join(' '))}</div>`; });
+        if (!ok) return;
         cerrar(); await recargar(); toast('Registro actualizado.'); enrutar();
       };
     });
@@ -313,7 +308,7 @@
 
   function tablaMovs(movs) {
     return `<div class="tabla-wrap"><table><thead><tr><th>N°</th><th>Fecha</th><th>Acto</th><th class="num">Bienes</th><th>Causal / motivo</th><th>Sustento</th><th>Usuario</th></tr></thead><tbody>
-      ${movs.map((m) => `<tr class="click" onclick="location.hash='#/movimiento/${esc(m.numero)}'"><td class="mono">${esc(m.numero)}${m.anulado ? ' <span class="chip bad">Anulado</span>' : ''}</td>
+      ${movs.map((m) => `<tr class="click" data-ir="#/movimiento/${esc(m.numero)}"><td class="mono">${esc(m.numero)}${m.anulado ? ' <span class="chip bad">Anulado</span>' : ''}</td>
       <td>${fecha(m.fecha)}</td><td>${esc(Core.TIPOS_MOVIMIENTO[m.tipo].nombre)}</td><td class="num">${m.items.length}</td>
       <td>${esc(m.causal || m.motivo || '')}</td><td>${esc(m.resolucion || m.documento || m.informe_tecnico || '')}</td><td>${esc(m.usuario)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin actos.</td></tr>'}</tbody></table></div>`;
   }
@@ -473,9 +468,10 @@
         const dup = mov.items.filter((c, i, a) => a.indexOf(c) !== i);
         if (dup.length) return mostrarErrores([`Código repetido en el formulario: ${dup.join(', ')} (art. 20.3).`]);
       }
-      const errores = Core.validarMovimiento(mov, S.porCodigo);
+      const errores = Core.validarMovimiento(mov, S.porCodigo, Core.hoyISO());
       if (errores.length) return mostrarErrores(errores);
-      const numero = await registrarMovimiento(mov, sobranteRef);
+      const numero = await intentar(() => registrarMovimiento(mov, sobranteRef), (err) => mostrarErrores(err.errores && err.errores.length ? err.errores : [err.message]));
+      if (!numero) return;
       toast(`Acto ${numero} registrado.`);
       location.hash = '#/movimiento/' + numero;
     };
@@ -486,40 +482,11 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  /** Registra el acto y actualiza los bienes en una sola transacción */
+  /** Registra el acto (el repositorio valida de nuevo y guarda en una sola transacción) */
   async function registrarMovimiento(mov, sobranteRef) {
-    mov.numero = Core.siguienteNumero(mov.tipo, mov.fecha.slice(0, 4), S.movs.map((m) => m.numero));
-    mov.usuario = S.usuario.usuario;
-    mov.registrado = new Date().toISOString();
-    const ops = [];
-    const detalleDe = (b, antes, despues) => ({ codigo: b.codigo, descripcion: b.descripcion, marca: b.marca, modelo: b.modelo, serie: b.serie, color: b.color,
-      medidas: b.medidas, estado: b.estado, valor: b.valor, cuenta_contable: b.cuenta_contable, ubicacion: b.ubicacion, antes, despues });
-    if (mov.tipo === 'ALTA') {
-      mov.detalle = mov.nuevos.map((n) => {
-        const b = Object.assign({ codigo_interno: '', medidas: '', dependencia: S.cfg.establecimiento, responsable: '', cuenta_contable: '', observaciones: '' },
-          n, { situacion: 'ACTIVO', creado: mov.registrado, alta: mov.numero, fecha_alta: mov.fecha, causal_alta: mov.causal });
-        ops.push({ store: 'bienes', valor: b });
-        return detalleDe(b, null, { situacion: 'ACTIVO', estado: b.estado, ubicacion: b.ubicacion, responsable: '' });
-      });
-      delete mov.nuevos;
-      if (sobranteRef) { // saneamiento de sobrante (art. 41): se vincula el alta al sobrante del inventario
-        const [id, i] = sobranteRef.split(':');
-        const inv = S.inventarios.find((x) => x.id === id);
-        if (inv && inv.sobrantes[Number(i)]) { inv.sobrantes[Number(i)].alta = mov.numero; ops.push({ store: 'inventarios', valor: inv }); }
-      }
-    } else {
-      mov.detalle = mov.items.map((c) => {
-        const r = Core.aplicarMovimiento(mov, S.porCodigo[c]);
-        r.bien.actualizado = mov.registrado;
-        ops.push({ store: 'bienes', valor: r.bien });
-        return detalleDe(S.porCodigo[c], r.antes, r.despues);
-      });
-    }
-    ops.push({ store: 'movimientos', valor: mov });
-    ops.push(DB.opBitacora(S.usuario.usuario, 'ACTO_' + mov.tipo, `${mov.numero}: ${mov.items.length} bien(es) — ${mov.items.slice(0, 20).join(', ')}`));
-    await DB.escribir(ops);
+    const numero = await R.registrarMovimiento(mov, sobranteRef);
     await recargar();
-    return mov.numero;
+    return numero;
   }
 
   function vistaMovimiento(numero) {
@@ -545,8 +512,22 @@
         ${m.observaciones ? `<tr><th>Observaciones</th><td>${esc(m.observaciones)}</td></tr>` : ''}
         <tr><th>Registrado por</th><td>${esc(m.usuario)} — ${new Date(m.registrado).toLocaleString('es-PE')}</td></tr></tbody></table></div>
       <div class="tabla-wrap"><table><thead><tr><th>Código</th><th>Denominación</th><th>Situación</th><th>Estado</th><th>Ubicación</th><th>Usuario</th><th class="num">Valor</th></tr></thead>
-      <tbody>${m.detalle.map((d) => `<tr class="click" onclick="location.hash='#/bien/${esc(d.codigo)}'"><td class="mono">${esc(d.codigo)}</td><td>${esc(d.descripcion)}</td>
-        <td>${dif(d, 'situacion')}</td><td>${dif(d, 'estado')}</td><td>${dif(d, 'ubicacion')}</td><td>${dif(d, 'responsable')}</td><td class="num">${soles(d.valor)}</td></tr>`).join('')}</tbody></table></div>`);
+      <tbody>${m.detalle.map((d) => `<tr class="click" data-ir="#/bien/${esc(d.codigo)}"><td class="mono">${esc(d.codigo)}</td><td>${esc(d.descripcion)}</td>
+        <td>${dif(d, 'situacion')}</td><td>${dif(d, 'estado')}</td><td>${dif(d, 'ubicacion')}</td><td>${dif(d, 'responsable')}</td><td class="num">${soles(d.valor)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="tarjeta" style="margin-top:1rem"><h2>Documentos firmados ${ref('Sustento del acto')}</h2>
+        ${R.adjuntos.disponible ? `${(() => { const ad = S.adjuntos.filter((a) => a.numero === m.numero); return ad.length
+          ? `<ul>${ad.map((a) => `<li><a href="${R.adjuntos.url(a.id)}" target="_blank" rel="noopener">${esc(a.nombre)}</a> — ${esc(a.descripcion || '')} <span class="muted pequeno">(${esc(a.subido_por)}, ${fecha(a.fecha)}, ${Math.round(a.tamano / 1024)} KB)</span></li>`).join('')}</ul>`
+          : '<p class="muted pequeno">Aún no se adjuntó el formato firmado.</p>'; })()}
+          ${puede.registrar() ? `<form id="fadj" class="barra"><input type="file" name="archivo" accept="application/pdf,image/jpeg,image/png" required style="width:auto">
+            <input name="descripcion" placeholder="Ej.: Anexo N° 03 firmado" style="width:auto;flex:1"><button class="btn">Adjuntar (PDF/JPG, máx. 10 MB)</button></form>` : ''}`
+        : '<p class="muted pequeno">Los documentos firmados se adjuntan en el modo servidor. En modo local, archive el formato impreso y firmado.</p>'}</div>`);
+    const fadj = raiz.querySelector('#fadj');
+    if (fadj) fadj.onsubmit = async (e) => {
+      e.preventDefault(); const fd = new FormData(fadj); const f = fd.get('archivo');
+      if (!f || !f.size) return toast('Seleccione un archivo.');
+      if (f.size > 10 * 1024 * 1024) return toast('El archivo supera los 10 MB.');
+      if (await intentar(() => R.adjuntos.subir(m.numero, f, Core.limpiar(fd.get('descripcion'))))) { await recargar(); toast('Documento adjuntado.'); vistaMovimiento(numero); }
+    };
     const salidaOrigen = m.tipo === 'REINGRESO' ? S.movs.find((x) => x.tipo === 'SALIDA' && !x.anulado && x.items.some((c) => m.items.includes(c)) && x.fecha <= m.fecha) : null;
     raiz.querySelector('#imp').onclick = () => Formatos.imprimir(Formatos.movimiento(m, ctx({ salidaOrigen })), true);
     const it = raiz.querySelector('#it');
@@ -578,12 +559,8 @@
         e.preventDefault();
         const fd = new FormData(e.target);
         const motivo = Core.limpiar(fd.get('motivo')); const documento = Core.limpiar(fd.get('documento'));
-        const ops = m.detalle.map((d) => d.antes === null
-          ? { store: 'bienes', borrar: true, clave: d.codigo }
-          : { store: 'bienes', valor: Object.assign({}, S.porCodigo[d.codigo], d.antes, { actualizado: new Date().toISOString() }) });
-        ops.push({ store: 'movimientos', valor: Object.assign({}, m, { anulado: { fecha: Core.hoyISO(), usuario: S.usuario.usuario, motivo, documento } }) });
-        ops.push(DB.opBitacora(S.usuario.usuario, 'ANULACION', `${m.numero}: ${motivo} ${documento}`));
-        await DB.escribir(ops); cerrar(); await recargar(); toast('Registro anulado.'); enrutar();
+        if ((await intentar(() => R.anular(m.numero, motivo, documento).then(() => true))) !== true) return;
+        cerrar(); await recargar(); toast('Registro anulado.'); enrutar();
       };
     });
   }
@@ -597,7 +574,7 @@
       Fases: planificación, trabajo de campo y trabajo de gabinete (art. 35). Se presenta con el Informe Final (Anexo N° 06) y el Acta de Conciliación (Anexo N° 05) hasta el 15/03 (Organización) o el 31/03 (Entidad) (art. 36).<br>
       <b>Supervisión (art. 94):</b> verificación periódica de existencia, ubicación, estado, condiciones de uso y asignación al usuario. La supervisión integral del Gobierno Regional a las CLAS es como mínimo semestral (D.S. N° 017-2008-SA, art. 103.d); el Gobierno Regional realiza además el inventario de los establecimientos (art. 79.f), para el cual este proceso es el insumo del CLAS.</div>
       <div class="tabla-wrap"><table><thead><tr><th>Código</th><th>Tipo</th><th>Año</th><th>Fecha de corte</th><th>Resolución</th><th>Verificados</th><th>Estado</th></tr></thead><tbody>
-      ${S.inventarios.map((i) => `<tr class="click" onclick="location.hash='#/inventario/${esc(i.id)}'"><td class="mono">${esc(i.id)}</td><td>${i.tipo === 'SUPERVISION' ? 'Supervisión' : 'Inventario anual'}</td><td>${i.anio}</td><td>${fecha(i.fecha_corte)}</td>
+      ${S.inventarios.map((i) => `<tr class="click" data-ir="#/inventario/${esc(i.id)}"><td class="mono">${esc(i.id)}</td><td>${i.tipo === 'SUPERVISION' ? 'Supervisión' : 'Inventario anual'}</td><td>${i.anio}</td><td>${fecha(i.fecha_corte)}</td>
         <td>${esc(i.resolucion)}</td><td>${Object.keys(i.verif || {}).length}</td><td>${i.estado === 'ABIERTO' ? '<span class="chip warn">En ejecución</span>' : '<span class="chip ok">Cerrado</span>'}${i.presentado ? ' <span class="chip info">Presentado</span>' : ''}</td></tr>`).join('') ||
         '<tr><td colspan="7" class="muted">No hay procesos registrados.</td></tr>'}</tbody></table></div>`);
     const nb = raiz.querySelector('#nuevo');
@@ -623,12 +600,10 @@
           m.querySelector('#err').innerHTML = '<div class="aviso bad">El inventario anual requiere la resolución de designación y los tres representantes mínimos de la Comisión (art. 32.1).</div>';
           return;
         }
-        const pref = tipo === 'ANUAL' ? 'INVENT' : 'SUPERV';
-        const inv = { id: `${pref}-${g('anio')}-${String(S.inventarios.filter((i) => i.id.startsWith(`${pref}-${g('anio')}`)).length + 1).padStart(2, '0')}`,
-          tipo, anio: Number(g('anio')), fecha_corte: g('fecha_corte'), resolucion: g('resolucion'), equipo: g('equipo'),
-          comision: { presidente: g('presidente'), contabilidad: g('contabilidad'), abastecimiento: g('abastecimiento') },
-          estado: 'ABIERTO', tipo_verificacion: 'F', verif: {}, sobrantes: [], conciliacion: {}, informe: {}, creado: new Date().toISOString() };
-        await DB.escribir([{ store: 'inventarios', valor: inv }, DB.opBitacora(S.usuario.usuario, 'INVENTARIO_INICIO', `${inv.id} — ${inv.resolucion}`)]);
+        const inv = await intentar(() => R.crearInventario({ tipo, anio: Number(g('anio')), fecha_corte: g('fecha_corte'), resolucion: g('resolucion'), equipo: g('equipo'),
+          comision: { presidente: g('presidente'), contabilidad: g('contabilidad'), abastecimiento: g('abastecimiento') } }),
+        (err) => { m.querySelector('#err').innerHTML = `<div class="aviso bad">${esc((err.errores || [err.message]).join(' '))}</div>`; });
+        if (!inv) return;
         cerrar(); await recargar(); location.hash = '#/inventario/' + inv.id;
       };
     });
@@ -742,7 +717,7 @@
              <div class="barra" style="margin-top:.75rem">${puede.inventariar() ? '<button class="btn" id="gPre" type="button">Guardar presentación</button>' : ''}<button class="btn" id="a09" type="button">Comunicación (Anexo N° 09)</button></div>` : ''}`}
       </div>`);
 
-    const guardarInv = async (accion, detalle) => { await DB.escribir([{ store: 'inventarios', valor: inv }].concat(accion ? [DB.opBitacora(S.usuario.usuario, accion, `${inv.id} ${detalle || ''}`)] : [])); };
+    const actualizar = (campos) => intentar(() => R.actualizarInventario(id, campos).then(() => true));
     const imprimirA07 = (grupo, bienes) => Formatos.imprimir(Formatos.fichaLevantamiento(inv, grupo, bienes, ctx()), true);
     raiz.querySelectorAll('[data-a07u]').forEach((b) => {
       b.onclick = () => { const p = persona(b.dataset.a07u); imprimirA07({ usuario: p.nombres, unidad: p.unidad || p.cargo, ubicacion: 'Varias' }, universo.filter((x) => x.responsable === p.id)); };
@@ -758,16 +733,16 @@
     imp('#a05', () => Formatos.imprimir(Formatos.actaConciliacion(inv, filasConciliacion(inv, universo, r), ctx())));
     imp('#a06', () => Formatos.imprimir(Formatos.informeFinal(Object.assign({}, inv, { informe: Object.assign({}, def, Object.fromEntries(Object.entries(inv.informe).filter(([, v]) => v))) }), r, ctx())));
     imp('#a09', () => Formatos.imprimir(Formatos.comunicacionInventario(inv, ctx())));
-    imp('#gPre', async () => { inv.oficio = val(raiz, '#ofi'); inv.presentado = val(raiz, '#pre'); await guardarInv('INVENTARIO_PRESENTACION', inv.oficio); toast('Presentación guardada.'); vistaInventario(id); });
+    imp('#gPre', async () => { if (await actualizar({ oficio: val(raiz, '#ofi'), presentado: val(raiz, '#pre') })) { await recargar(); toast('Presentación guardada.'); vistaInventario(id); } });
     if (!editable) return;
 
     const pf = raiz.querySelector('#planFecha');
     if (pf) {
-      const gPlan = async () => { inv.plan_fecha = val(raiz, '#planFecha'); inv.plan_comunicacion = val(raiz, '#planCom'); await guardarInv(); };
+      const gPlan = async () => { inv.plan_fecha = val(raiz, '#planFecha'); inv.plan_comunicacion = val(raiz, '#planCom'); await actualizar({ plan_fecha: inv.plan_fecha, plan_comunicacion: inv.plan_comunicacion }); };
       pf.onchange = gPlan; raiz.querySelector('#planCom').onchange = gPlan;
     }
     const tv = raiz.querySelector('#tv');
-    tv.onchange = async () => { inv.tipo_verificacion = tv.value; await guardarInv(); };
+    tv.onchange = async () => { inv.tipo_verificacion = tv.value; await actualizar({ tipo_verificacion: tv.value }); };
     let lista = [];
     const pintar = () => {
       const u = val(raiz, '#iu'); const q = val(raiz, '#iq').toLowerCase();
@@ -788,21 +763,24 @@
       const c = tr.dataset.c;
       const g = (k) => tr.querySelector(`[data-k=${k}]`).value;
       const enc = g('encontrado');
-      if (!enc) { delete inv.verif[c]; return; }
+      if (!enc) { delete inv.verif[c]; return [c, null]; }
       inv.verif[c] = enc === 'no' ? { encontrado: false, obs: g('obs'), fecha: Core.hoyISO(), usuario: S.usuario.usuario }
         : { encontrado: true, uso: g('uso'), estado: g('estado'), ubicacion: g('ubicacion'), responsable: g('responsable'), obs: g('obs'),
           tipo: inv.tipo_verificacion || 'F', fecha: Core.hoyISO(), usuario: S.usuario.usuario };
+      return [c, inv.verif[c]];
     };
     raiz.querySelector('#iu').onchange = () => { raiz.querySelector('#iq').value = ''; pintar(); };
     raiz.querySelector('#iq').oninput = pintar;
     raiz.querySelector('#it').onchange = async (e) => {
       const tr = e.target.closest('tr[data-c]'); if (!tr) return;
       if (e.target.dataset.k !== 'encontrado' && !tr.querySelector('[data-k=encontrado]').value) tr.querySelector('[data-k=encontrado]').value = 'si';
-      registrar(tr); await guardarInv();
+      const [c, v] = registrar(tr); await intentar(() => R.verificar(id, c, v));
     };
     raiz.querySelector('#todosOk').onclick = async () => {
-      raiz.querySelectorAll('#it tr[data-c]').forEach((tr) => { const s = tr.querySelector('[data-k=encontrado]'); if (!s.value) { s.value = 'si'; registrar(tr); } });
-      await guardarInv(); toast('Bienes visibles marcados como encontrados.');
+      const mapa = {};
+      raiz.querySelectorAll('#it tr[data-c]').forEach((tr) => { const s = tr.querySelector('[data-k=encontrado]'); if (!s.value) { s.value = 'si'; const [c, v] = registrar(tr); mapa[c] = v; } });
+      if (Object.keys(mapa).length) await intentar(() => R.verificarVarios(id, mapa));
+      toast('Bienes visibles marcados como encontrados.');
     };
     raiz.querySelector('#sob').onclick = () => modal(`<h2>Registrar bien sobrante</h2><p class="muted pequeno">Bien que se encuentra físicamente pero no figura en el registro (art. 4.2.f).
       Su incorporación requiere saneamiento: posesión mínima de 1 año (art. 39), publicación por 10 días hábiles, informe técnico y resolución (art. 41).</p>
@@ -819,18 +797,18 @@
         e.preventDefault(); const fd = new FormData(e.target); const o = {};
         ['descripcion', 'marca', 'serie', 'estado', 'ubicacion', 'fecha_posesion', 'origen', 'obs'].forEach((k) => { o[k] = Core.limpiar(fd.get(k)); });
         o.descripcion = o.descripcion.toUpperCase();
-        inv.sobrantes.push(o); await guardarInv('INVENTARIO_SOBRANTE', o.descripcion); cerrar(); await recargar(); vistaInventario(id);
+        await intentar(() => R.agregarSobrante(id, o)); cerrar(); await recargar(); vistaInventario(id);
       };
     });
     const leerGabinete = () => {
       raiz.querySelectorAll('[data-cta]').forEach((i) => { if (i.value === '') delete inv.conciliacion[i.dataset.cta]; else inv.conciliacion[i.dataset.cta] = Number(i.value); });
       raiz.querySelectorAll('[data-inf]').forEach((t) => { inv.informe[t.dataset.inf] = t.value.trim(); });
     };
-    imp('#gGab', async () => { leerGabinete(); await guardarInv('INVENTARIO_GABINETE'); toast('Gabinete guardado.'); vistaInventario(id); });
+    imp('#gGab', async () => { leerGabinete(); if (await actualizar({ conciliacion: inv.conciliacion, informe: inv.informe })) { await recargar(); toast('Gabinete guardado.'); vistaInventario(id); } });
     imp('#proponer', () => { raiz.querySelectorAll('[data-inf]').forEach((t) => { if (!t.value.trim() && def[t.dataset.inf]) t.value = def[t.dataset.inf]; }); toast('Texto sugerido agregado. Revíselo y guarde.'); });
     raiz.querySelector('#cer').onclick = () => {
-      if (anual) leerGabinete();
-      const rr = Core.resultadosInventario(universo, inv.verif); // recalcula con la verificación actual
+      if (anual) { leerGabinete(); actualizar({ conciliacion: inv.conciliacion, informe: inv.informe }); }
+      const rr = Core.resultadosInventario(universo, inv.verif); // vista previa; el repositorio recalcula al cerrar
       const reg = Core.regularizacionInventario(rr);
       modal(`<h2>Cerrar ${anual ? 'inventario' : 'supervisión'}</h2>
         ${rr.sinVerificar.length ? `<div class="aviso warn">${rr.sinVerificar.length} bienes sin verificar. No se modificarán y quedarán reportados en el informe.</div>` : ''}
@@ -839,15 +817,8 @@
         <div class="barra"><button class="btn primario" id="ok">Cerrar</button><button class="btn" data-cerrar>Cancelar</button></div>`,
       (m, cerrar) => {
         m.querySelector('#ok').onclick = async () => {
-          if (Object.keys(reg).length) {
-            inv.movimiento = await registrarMovimiento({ tipo: 'INVENTARIO', fecha: Core.hoyISO(), items: Object.keys(reg), regularizacion: reg,
-              documento: inv.resolucion, motivo: `Cierre de ${inv.id} (corte ${fecha(inv.fecha_corte)})` });
-          }
-          const cods = (a) => a.map((b) => b.codigo);
-          inv.resultados = { conformes: cods(rr.conformes), faltantes: cods(rr.faltantes), sinVerificar: cods(rr.sinVerificar), bajasNoUbicadas: cods(rr.bajasNoUbicadas),
-            diferencias: rr.diferencias.map((d) => ({ codigo: d.bien.codigo, cambios: d.cambios })) };
-          inv.estado = 'CERRADO'; inv.cerrado = Core.hoyISO();
-          await guardarInv('INVENTARIO_CIERRE'); cerrar(); await recargar(); toast('Proceso cerrado.'); vistaInventario(id);
+          if (!(await intentar(() => R.cerrarInventario(id)))) return;
+          cerrar(); await recargar(); toast('Proceso cerrado.'); vistaInventario(id);
         };
       });
     };
@@ -864,7 +835,7 @@
         <p class="pequeno">Procede cuando se desconoce la ubicación del bien y no hay documentación para su baja, o cuando no es posible recuperarlo (art. 44). Requiere un informe técnico y la resolución de la OGA
         que aprueba la baja por la causal del art. 48.1.i (art. 45). La OGA comunica las circunstancias al órgano del Sistema Nacional de Control (art. 46). Si hubo sustracción, use la causal "Sustracción", con denuncia.</p>
         ${faltantes.length ? `<div class="tabla-wrap"><table><thead><tr><th>Código</th><th>Denominación</th><th>Última ubicación</th><th>Último usuario</th><th class="num">Valor</th></tr></thead><tbody>
-          ${faltantes.map((b) => `<tr class="click" onclick="location.hash='#/bien/${esc(b.codigo)}'"><td class="mono">${esc(b.codigo)}</td><td>${esc(b.descripcion)}</td><td>${esc(b.ubicacion)}</td><td>${esc(nombrePersona(b.responsable))}</td><td class="num">${soles(b.valor)}</td></tr>`).join('')}
+          ${faltantes.map((b) => `<tr class="click" data-ir="#/bien/${esc(b.codigo)}"><td class="mono">${esc(b.codigo)}</td><td>${esc(b.descripcion)}</td><td>${esc(b.ubicacion)}</td><td>${esc(nombrePersona(b.responsable))}</td><td class="num">${soles(b.valor)}</td></tr>`).join('')}
           </tbody></table></div>${puede.registrar() ? `<div class="barra" style="margin-top:.75rem"><a class="btn primario" href="#/nuevo/BAJA?causal=${encodeURIComponent(causalF)}&sel=${faltantes.map((b) => b.codigo).join(',')}">Baja por saneamiento de faltantes</a>
           <a class="btn" href="#/nuevo/BAJA?causal=Sustracci%C3%B3n&sel=${faltantes.map((b) => b.codigo).join(',')}">Baja por sustracción (con denuncia)</a></div>` : ''}`
         : '<p class="muted">No hay bienes faltantes.</p>'}</div>
@@ -900,7 +871,7 @@
         <p>${S.cfg.plan_aseguramiento ? '<span class="chip ok">Aprobado</span> ' + esc(S.cfg.plan_aseguramiento) : '<span class="chip warn">No registrado</span> Regístrelo en Configuración.'} · ${k.sinPoliza} bienes sin póliza registrada.</p></div></div>
       <div class="tarjeta"><h2>Registro de mantenimientos ${ref('Art. 88')}</h2>${tablaMovs(mantos)}</div>
       ${vencidas.length ? `<div class="tarjeta"><h2>Pólizas vencidas</h2><div class="tabla-wrap"><table><thead><tr><th>Código</th><th>Denominación</th><th>Póliza</th><th>Venció</th></tr></thead><tbody>
-        ${vencidas.map((b) => `<tr class="click" onclick="location.hash='#/bien/${esc(b.codigo)}'"><td class="mono">${esc(b.codigo)}</td><td>${esc(b.descripcion)}</td><td>${esc(b.poliza)}</td><td>${fecha(b.poliza_vence)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`);
+        ${vencidas.map((b) => `<tr class="click" data-ir="#/bien/${esc(b.codigo)}"><td class="mono">${esc(b.codigo)}</td><td>${esc(b.descripcion)}</td><td>${esc(b.poliza)}</td><td>${fecha(b.poliza_vence)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`);
   }
 
   // ---------------- Reportes ----------------
@@ -1016,9 +987,9 @@
         if (p && !activo && S.bienes.some((b) => b.responsable === p.id && !['DISPUESTO', 'BAJA'].includes(b.situacion))) {
           return toast('El usuario aún tiene bienes asignados. Registre primero la devolución.');
         }
-        const o = Object.assign({}, p || { id: 'P' + Date.now().toString(36) }, { nombres: g('nombres').toUpperCase(), dni, correo: g('correo'), unidad: g('unidad'), cargo: g('cargo'),
+        const o = Object.assign({}, p || {}, { nombres: g('nombres').toUpperCase(), dni, correo: g('correo'), unidad: g('unidad'), cargo: g('cargo'),
           local: g('local'), direccion: g('direccion'), condicion: fd.get('condicion'), activo });
-        await DB.escribir([{ store: 'personal', valor: o }, DB.opBitacora(S.usuario.usuario, p ? 'EDICION_USUARIO_BIENES' : 'ALTA_USUARIO_BIENES', `${o.dni} ${o.nombres}`)]);
+        if (!(await intentar(() => R.guardarPersona(o)))) return;
         cerrar(); await recargar(); vistaMaestros();
       };
     });
@@ -1033,8 +1004,7 @@
         e.preventDefault(); const fd = new FormData(e.target);
         const nombre = Core.limpiar(fd.get('nombre')).toUpperCase();
         if (!u && S.ubic.some((x) => x.nombre === nombre)) return toast('La ubicación ya existe.');
-        await DB.escribir([{ store: 'ubicaciones', valor: { nombre, piso: Core.limpiar(fd.get('piso')), activo: fd.get('activo') === '1' } },
-          DB.opBitacora(S.usuario.usuario, u ? 'EDICION_UBICACION' : 'ALTA_UBICACION', nombre)]);
+        if ((await intentar(() => R.guardarUbicacion({ nombre, piso: Core.limpiar(fd.get('piso')), activo: fd.get('activo') === '1' }, !u).then(() => true))) !== true) return;
         cerrar(); await recargar(); vistaMaestros();
       };
     });
@@ -1064,7 +1034,7 @@
   // ---------------- Bitácora ----------------
   async function vistaBitacora() {
     if (!puede.administrar()) return marco('<div class="aviso bad">Acceso restringido.</div>');
-    const reg = (await DB.todos('bitacora')).reverse();
+    const reg = (await intentar(() => R.bitacora())) || [];
     marco(`<div class="barra"><h1>Bitácora de auditoría</h1><button class="btn" id="exp">Exportar</button></div>
       <p class="muted pequeno">Registro que no se edita desde el aplicativo: ingresos, correcciones, actos, anulaciones, inventarios, cargas y restauraciones.</p>
       <div class="tabla-wrap"><table><thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
@@ -1076,7 +1046,7 @@
   // ---------------- Configuración ----------------
   async function vistaConfig() {
     if (!puede.administrar()) return marco('<div class="aviso bad">Acceso restringido.</div>');
-    const usuarios = await DB.todos('usuarios');
+    const usuarios = (await intentar(() => R.listarUsuarios())) || [];
     const c = S.cfg;
     const campos = [['entidad', 'Entidad u Organización'], ['sigla', 'Siglas (etiquetas)'], ['establecimiento', 'Establecimiento'], ['direccion', 'Dirección del local'],
       ['ubigeo', 'Distrito — provincia — departamento'], ['red', 'Unidad Ejecutora / Red'], ['ruc', 'RUC'], ['jefe', 'Gerente del CLAS / jefe del establecimiento (Reglamento, arts. 48–49)'], ['presidente_cd', 'Presidente(a) del Consejo Directivo (Reglamento, art. 44)'],
@@ -1095,9 +1065,11 @@
         <div class="barra"><button class="btn" id="semilla" ${S.bienes.length ? 'disabled' : ''}>Cargar inventario 2025 incluido (537 bienes)</button>
         <label class="btn" style="margin:0">Importar Excel…<input type="file" id="xls" accept=".xlsx,.xls" hidden></label></div></div>
       <div class="tarjeta"><h2>Respaldo</h2>
-        <p class="pequeno">Los datos se guardan en este navegador. Descargue un respaldo al menos una vez por semana y guárdelo en un medio institucional.</p>
+        ${R.modo === 'servidor'
+          ? '<p class="pequeno">Los datos están en el servidor institucional (Cloudflare D1), con recuperación a cualquier minuto de los últimos 30 días y copia semanal automática en el almacenamiento R2. Además puede descargar una copia manual.</p>'
+          : '<p class="pequeno">Los datos se guardan en este navegador. Descargue un respaldo al menos una vez por semana y guárdelo en un medio institucional.</p>'}
         <div class="barra"><button class="btn primario" id="resp">Descargar respaldo (JSON)</button>
-        <label class="btn peligro" style="margin:0">Restaurar respaldo…<input type="file" id="rest" accept=".json" hidden></label></div></div>
+        ${R.modo === 'servidor' ? '' : '<label class="btn peligro" style="margin:0">Restaurar respaldo…<input type="file" id="rest" accept=".json" hidden></label>'}</div></div>
       <div class="tarjeta"><div class="barra"><h2 style="flex:1;margin:0">Usuarios del sistema</h2><button class="btn" id="nus">+ Agregar usuario</button></div>
         <div class="tabla-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>
         ${usuarios.map((u) => `<tr><td>${esc(u.usuario)}</td><td>${esc(u.nombre)}</td><td>${ROLES[u.rol] || u.rol}</td><td>${u.activo ? 'Activo' : 'Inactivo'}</td>
@@ -1105,13 +1077,13 @@
     raiz.querySelector('#fc').onsubmit = async (e) => {
       e.preventDefault(); const fd = new FormData(e.target); const n = {};
       campos.forEach(([k]) => { n[k] = k.startsWith('uit') ? Number(fd.get(k)) : Core.limpiar(fd.get(k)); });
-      await DB.guardarConfig(n); await DB.escribir([DB.opBitacora(S.usuario.usuario, 'CONFIGURACION', JSON.stringify(n))]);
+      if ((await intentar(() => R.guardarConfig(n).then(() => true))) !== true) return;
       await recargar(); toast('Configuración guardada.');
     };
     raiz.querySelector('#semilla').onclick = async () => {
       try {
         const filas = await (await fetch('data/inventario-2025.json')).json();
-        const r = await DB.cargarInventarioInicial(filas, S.usuario.usuario, 'INVENTARIO_CLAS_QUERENCIA_2025.xlsx');
+        const r = await R.cargaInicial(filas, 'INVENTARIO_CLAS_QUERENCIA_2025.xlsx');
         await recargar(); toast(`${r.cargados} bienes cargados; ${r.omitidos} omitidos.`); vistaConfig();
       } catch (err) { toast('No se pudo leer el archivo incluido. Si abrió la app con doble clic, use "Importar Excel".'); }
     };
@@ -1120,19 +1092,20 @@
       if (typeof XLSX === 'undefined') return toast('No se pudo cargar la librería de Excel.');
       const wb = XLSX.read(await f.arrayBuffer(), { cellDates: true });
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
-      const r = await DB.cargarInventarioInicial(filas, S.usuario.usuario, f.name);
+      const r = await intentar(() => R.cargaInicial(filas, f.name));
+      if (!r) return;
       await recargar(); toast(`${r.cargados} bienes cargados; ${r.omitidos} omitidos.`); vistaConfig();
     };
     raiz.querySelector('#resp').onclick = async () => {
-      descargarJSON(`respaldo_inventario_${Core.hoyISO()}.json`, await DB.exportarTodo());
-      await DB.escribir([DB.opBitacora(S.usuario.usuario, 'RESPALDO', 'Respaldo descargado')]);
+      const d = await intentar(() => R.respaldo());
+      if (d) descargarJSON(`respaldo_inventario_${Core.hoyISO()}.json`, d);
     };
-    raiz.querySelector('#rest').onchange = (e) => {
+    if (raiz.querySelector('#rest')) raiz.querySelector('#rest').onchange = (e) => {
       const f = e.target.files[0]; if (!f) return;
       modal(`<h2>Restaurar respaldo</h2><div class="aviso bad">Se reemplazarán TODOS los datos actuales por los del archivo "${esc(f.name)}".</div>
         <div class="barra"><button class="btn peligro" id="ok">Restaurar</button><button class="btn" data-cerrar>Cancelar</button></div>`, (m, cerrar) => {
         m.querySelector('#ok').onclick = async () => {
-          try { await DB.restaurarTodo(JSON.parse(await f.text()), S.usuario.usuario); cerrar(); salir(); toast('Respaldo restaurado. Ingrese nuevamente.'); }
+          try { await R.restaurar(JSON.parse(await f.text())); cerrar(); salir(); toast('Respaldo restaurado. Ingrese nuevamente.'); }
           catch (err) { toast(err.message); }
         };
       });
@@ -1147,16 +1120,14 @@
     (m, cerrar) => {
       m.querySelector('#fu').onsubmit = async (e) => {
         e.preventDefault(); const fd = new FormData(e.target); const u = Core.limpiar(fd.get('usuario')).toLowerCase();
-        if (await DB.obtener('usuarios', u)) return toast('El usuario ya existe.');
-        await DB.crearUsuario(u, Core.limpiar(fd.get('nombre')), fd.get('rol'), fd.get('clave'), true);
-        await DB.escribir([DB.opBitacora(S.usuario.usuario, 'ALTA_USUARIO_SISTEMA', `${u} (${fd.get('rol')})`)]);
+        if ((await intentar(() => R.crearUsuario({ usuario: u, nombre: Core.limpiar(fd.get('nombre')), rol: fd.get('rol'), clave: fd.get('clave') }).then(() => true))) !== true) return;
         cerrar(); vistaConfig();
       };
     });
     raiz.querySelectorAll('[data-u]').forEach((b) => {
       b.onclick = async () => {
-        const u = await DB.obtener('usuarios', b.dataset.u); u.activo = !u.activo;
-        await DB.escribir([{ store: 'usuarios', valor: u }, DB.opBitacora(S.usuario.usuario, u.activo ? 'ACTIVA_USUARIO' : 'DESACTIVA_USUARIO', u.usuario)]);
+        const u = usuarios.find((x) => x.usuario === b.dataset.u);
+        await intentar(() => R.activarUsuario(u.usuario, !u.activo));
         vistaConfig();
       };
     });
@@ -1193,14 +1164,20 @@
 
   async function iniciar() {
     try {
-      await DB.inicializar();
-      await recargar();
-      const u = sessionStorage.getItem('gi_usuario');
-      if (u) { const r = await DB.obtener('usuarios', u); if (r && r.activo) S.usuario = r; }
+      R = await Repo.detectar();
+      await R.iniciar();
+      window.addEventListener('sesion-expirada', () => { if (S.usuario) { S.usuario = null; pantallaLogin('Su sesión expiró. Ingrese nuevamente.'); } });
+      S.usuario = await R.sesionActual();
+      if (S.usuario && !S.usuario.debeCambiar) await recargar();
       window.addEventListener('hashchange', enrutar);
+      // navegación por filas de tabla (sin manejadores en línea, compatible con CSP estricta)
+      document.addEventListener('click', (e) => {
+        const f = e.target.closest('[data-ir]');
+        if (f && !e.target.closest('a, button, input, select, textarea')) location.hash = f.dataset.ir;
+      });
       enrutar();
     } catch (e) {
-      raiz.innerHTML = `<div class="login"><div class="tarjeta"><div class="aviso bad">No se pudo abrir la base de datos local: ${esc(e.message)}.
+      raiz.innerHTML = `<div class="login"><div class="tarjeta"><div class="aviso bad">No se pudo iniciar el aplicativo: ${esc(e.message)}.
         Use un navegador actualizado (Chrome, Edge o Firefox) fuera del modo incógnito.</div></div></div>`;
     }
   }

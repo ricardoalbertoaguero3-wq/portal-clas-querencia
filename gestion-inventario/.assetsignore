@@ -1,0 +1,11 @@
+node_modules
+api
+migrations
+tests
+.wrangler
+.dev.vars*
+wrangler.toml
+package.json
+package-lock.json
+.assetsignore
+.gitignore

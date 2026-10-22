@@ -1,0 +1,19 @@
+{
+  "name": "gestion-inventario-clas-querencia",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Gestión de bienes muebles patrimoniales — CLAS Agregado La Querencia. Cloudflare Workers + D1 + R2.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:migrar:local": "wrangler d1 migrations apply gestion-inventario --local",
+    "db:migrar": "wrangler d1 migrations apply gestion-inventario --remote",
+    "desplegar": "wrangler deploy",
+    "test": "node --test tests/core.test.js"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

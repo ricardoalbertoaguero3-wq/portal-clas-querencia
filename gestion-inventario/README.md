@@ -67,27 +67,33 @@ Se complementa con el **Reglamento de la Ley N° 29124 (D.S. N° 017-2008-SA)**:
 - Modificatorias posteriores.
 - UIT 2026.
 
-## 4. Arquitectura
+## 4. Plataforma y arquitectura (versión 2)
+
+**Plataforma de desarrollo y producción: Cloudflare Workers + D1 + R2.** Es la misma cuenta que ya usa el portal del
+CLAS, cuesta unos USD 5 al mes y no requiere servidor propio. La justificación, la arquitectura, la API, la seguridad y
+el despliegue están en [`docs/MANUAL_TECNICO.md`](docs/MANUAL_TECNICO.md).
 
 ```
-Navegador (Chrome / Edge / Firefox)
- ├─ index.html + css/app.css          Interfaz (responsive, modo oscuro)
- ├─ js/core.js     Reglas de la Directiva: catálogos, validaciones, transiciones, inventario, plazos ← probado con node --test
- ├─ js/normativa.js Sustento legal, base legal, matriz módulo↔artículo, ambigüedades
- ├─ js/db.js       IndexedDB: datos, usuarios (SHA-256 iterado con sal), bitácora, respaldo
- ├─ js/formatos.js Anexos N° 01, 02, 03, 04, 05, 06, 07, 09, Apéndice A, etiquetas, informe de sustento
- ├─ js/app.js      Vistas, rutas (#/...), permisos por rol
- └─ lib/xlsx.full.min.js  SheetJS 0.18.5 (importar/exportar Excel, sin internet)
+gestion-inventario/
+├── index.html, css/, lib/, data/     Interfaz (sin compilación)
+├── js/core.js        Reglas de la Directiva y del Reglamento CLAS — compartidas por navegador y servidor
+├── js/repo.js        Capa de datos: modo servidor (API) o modo local (IndexedDB)
+├── js/db.js          IndexedDB (modo local)
+├── js/app.js         Vistas y navegación
+├── js/formatos.js    Anexos N° 01, 02, 03, 04, 05, 06, 07 y 09; Apéndice A; etiquetas; informes
+├── js/normativa.js   Sustento legal y matriz normativa
+├── api/index.js      API (Hono sobre Cloudflare Workers): sesión JWT, roles, actos, inventario, adjuntos, respaldo
+├── api/seguridad.js  PBKDF2-SHA256, comparación en tiempo constante, política de claves
+├── migrations/       Esquema SQL de D1
+├── wrangler.toml     Configuración de Cloudflare (D1, R2, cron de respaldo, assets)
+├── _headers          CSP y cabeceras de seguridad de la interfaz
+└── tests/            Pruebas de reglas de negocio (npm test)
 ```
 
-**Por qué esta arquitectura:** el portal ya se publica en GitHub Pages, sin servidor ni
-base de datos. Una aplicación 100 % cliente:
-- no cuesta nada ni requiere un proveedor de hosting;
-- funciona sin internet, lo que importa en el primer nivel de atención;
-- se implementa hoy mismo.
-
-**Su límite:** los datos viven en **un solo navegador de una sola PC**. Sirve para una sola
-persona responsable de Control Patrimonial. Para uso multiusuario ver el roadmap (§10).
+**Modos:**
+- **Servidor (producción):** multiusuario, con los datos en D1 y los documentos firmados en R2.
+- **Local:** si no hay API (por ejemplo, al abrir los archivos sin servidor), funciona como la versión 1, con los datos
+  en el navegador. Sirve para demostración, capacitación o una contingencia.
 
 ## 5. Módulos (organizados por Títulos de la Directiva)
 
@@ -123,7 +129,7 @@ persona responsable de Control Patrimonial. Para uso multiusuario ver el roadmap
 Situaciones del bien: Activo → En salida / Afectado / Faltante → Baja → Excluido del patrimonio. La baja por saneamiento de
 faltantes excluye el bien sin acto de disposición (art. 60.3).
 
-## 6. Modelo de datos (IndexedDB)
+## 6. Modelo de datos (modo local, IndexedDB — en modo servidor ver docs/MANUAL_TECNICO.md §3)
 
 | Almacén | Clave | Campos principales |
 |---|---|---|
@@ -141,10 +147,11 @@ reconstruye el kardex y se hace la anulación sin ambigüedad.
 
 ## 7. Manual de usuario (resumen)
 
-1. **Abrir:** desde GitHub Pages (`…/gestion-inventario/`) o en la PC con un servidor local
-   (`python -m http.server` dentro de esta carpeta → `http://localhost:8000`).
-   Si abre el archivo con doble clic, la carga del inventario incluido no funciona; use "Importar Excel".
-2. **Primer ingreso:** usuario `admin`, clave `admin`. El sistema obliga a cambiarla.
+1. **Abrir:** en producción, desde la dirección publicada en Cloudflare (modo servidor; el despliegue está en
+   `docs/MANUAL_TECNICO.md` §6). Para demostración sin servidor, sirva esta carpeta con `python -m http.server`
+   (modo local).
+2. **Primer ingreso:** en modo servidor, usuario `admin` con la clave temporal `ADMIN_INICIAL` que definió el
+   administrador técnico. En modo local, usuario `admin` y clave `admin`. En ambos casos el sistema obliga a cambiarla.
 3. **Configuración:** complete los datos y responsables (jefe(a), OGA, OCP, Contabilidad, dirección), los planes de
    mantenimiento y aseguramiento y la UIT vigente. Luego pulse **"Cargar inventario 2025 incluido"**.
 4. **Marco normativo:** imprima el **informe de sustento legal** y tramite su aprobación ante la Gerencia del CLAS, con copia a la OCP de la UE.
@@ -169,15 +176,17 @@ Roles:
 
 ## 8. Plan de pruebas
 
-- **Unitarias** (reglas de la Directiva, plazos, inventario y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 20 pruebas.
+- **Unitarias** (reglas de la Directiva, plazos, inventario y carga del Excel 2025): `node --test gestion-inventario/tests/core.test.js` → 21 pruebas.
 - **Funcionales (verificadas en Chromium):** carga de 537 bienes; asignación de 20 bienes (Anexo N° 03); salida
   incompleta rechazada; baja de 4 bienes con borrador e Informe Técnico (Anexo N° 01); disposición por donación (Anexo N° 02)
   y su anulación; inventario anual sin resolución rechazado; inventario con faltante, diferencia, uso/desuso y sobrante;
   Anexos N° 07, 05, 06 y 09; alta del sobrante desde Saneamiento; etiquetas; informe de sustento legal; vista móvil sin
   desplazamiento horizontal; sin errores de consola.
+- **Modo servidor (Workers + D1 con `wrangler dev`):** los mismos 47 casos, más 12 pruebas de API (concurrencia,
+  bloqueo, roles, adjuntos, sesiones). Todos pasan. Detalle en `docs/MANUAL_TECNICO.md` §9.
 - **Pendiente de prueba con usuarios reales:** impresión física en A4 y lectura del formato por la UE.
 
-## 9. Seguridad: lo que hace y lo que **no** hace
+## 9. Seguridad (modo local) — en modo servidor ver docs/MANUAL_TECNICO.md §5
 
 - Claves con SHA-256 iterado y sal, cambio obligatorio en el primer ingreso, roles y bitácora.
 - **Limitación importante:** todo corre en el navegador. Quien tenga acceso a la PC y
@@ -194,17 +203,20 @@ Roles:
 
 | Fase | Contenido |
 |---|---|
-| 1 (esta versión) | Aplicativo local: registro, movimientos, formatos, inventario, reportes. |
-| 1.1 | Etiquetas con código QR por bien y verificación del inventario escaneando con el celular; adjuntar el PDF firmado a cada movimiento (Cloudflare R2, ya usado por el portal). |
-| 2 | Backend multiusuario (FastAPI o NestJS + PostgreSQL, JWT, HTTPS, bitácora en servidor, backups automáticos), reutilizando `core.js` como especificación de las reglas. |
+| 1 | Aplicativo local: registro, movimientos, formatos, inventario, reportes. ✔ |
+| 2 (esta versión) | Multiusuario en Cloudflare Workers + D1 + R2: JWT, roles en servidor, concurrencia, bitácora inalterable, adjuntos firmados, respaldo automático. ✔ (pendiente: despliegue en la cuenta del CLAS) |
+| 2.1 | Etiquetas con código QR y verificación del inventario escaneando con el celular; modo sin conexión con sincronización. |
 | 3 | Depreciación por cuenta contable; conciliación contable-patrimonial; exportación en el formato que exija la UE o el SIGA-MEF; integración del mantenimiento con el Plan de Mantenimiento 2026. |
 
 ## 11. Riesgos
 
 | Riesgo | Mitigación |
 |---|---|
-| Pérdida de datos (cambio de PC o borrado del navegador) | Respaldo semanal obligatorio; fase 2 con servidor. |
-| Uso en varias PC genera registros divergentes | Un solo operador o una sola PC hasta la fase 2. |
+| Pérdida de datos | Modo servidor: D1 Time Travel y respaldo semanal en R2. Modo local: respaldo manual semanal. |
+| Caída de internet en el establecimiento | Modo local como contingencia; registrar en el servidor dentro de los 10 días hábiles (art. 23). |
+| Datos personales fuera del Perú (Ley N° 29733) | Consulta a la OAJ (ver Sustento legal); se almacenan solo los datos mínimos. |
+| Dependencia de un proveedor | Esquema SQL estándar y respaldo JSON completo: se puede migrar a PostgreSQL. |
+| Plan gratuito de Workers insuficiente (10 ms de CPU por petición) | Contratar el plan Workers Paid (USD 5 al mes). |
 | Los formatos no coinciden con el modelo de la UE | Validar con Control Patrimonial de la UE; ajustar `formatos.js`. |
 | Origen de los bienes no definido (CLAS / UE) | Saneamiento con la UE antes del inventario 2026. |
 | Normativa modificada | Los catálogos están concentrados en `core.js` (fáciles de actualizar). |

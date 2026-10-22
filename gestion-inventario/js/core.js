@@ -598,6 +598,131 @@
   }
 
   // ---------------------------------------------------------------
+  // Operaciones de registro (puras): las usan el navegador (modo local)
+  // y el servidor (modo multiusuario), para aplicar las mismas reglas.
+  // ---------------------------------------------------------------
+  const copia = (o) => JSON.parse(JSON.stringify(o));
+
+  /** Fecha actual en Lima (el servidor corre en UTC) */
+  function hoyEnLima(d) {
+    try { return (d || new Date()).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); } catch (e) { return hoyISO(d); }
+  }
+
+  const detalleDe = (b, antes, despues) => ({ codigo: b.codigo, descripcion: b.descripcion, marca: b.marca, modelo: b.modelo, serie: b.serie, color: b.color,
+    medidas: b.medidas, estado: b.estado, valor: b.valor, cuenta_contable: b.cuenta_contable, ubicacion: b.ubicacion, antes, despues });
+
+  /** Valida, numera y calcula los cambios de un acto.
+   *  ctx: {bienesPorCodigo, numeros, usuario, ahora (ISO), hoy, establecimiento}
+   *  Devuelve {errores} o {mov, bienes} (bienes = registros completos a guardar). */
+  function prepararRegistro(movEntrada, ctx) {
+    const mov = copia(movEntrada);
+    const hoy = ctx.hoy || hoyISO();
+    if (mov.tipo === 'ALTA') {
+      mov.items = (mov.nuevos || []).map((o) => limpiar(o.codigo));
+      const dup = mov.items.filter((c, i, a) => a.indexOf(c) !== i);
+      if (dup.length) return { errores: [`Código repetido en el formulario: ${[...new Set(dup)].join(', ')} (art. 20.3).`] };
+    }
+    const errores = validarMovimiento(mov, ctx.bienesPorCodigo, hoy);
+    if (errores.length) return { errores };
+    mov.numero = siguienteNumero(mov.tipo, mov.fecha.slice(0, 4), ctx.numeros || []);
+    mov.usuario = ctx.usuario;
+    mov.registrado = ctx.ahora || new Date().toISOString();
+    const bienes = [];
+    if (mov.tipo === 'ALTA') {
+      mov.detalle = mov.nuevos.map((n) => {
+        const b = Object.assign({ codigo_interno: '', medidas: '', dependencia: ctx.establecimiento || '', responsable: '', cuenta_contable: '', observaciones: '', origen: 'CLAS' },
+          n, { codigo: limpiar(n.codigo), descripcion: limpiar(n.descripcion).toUpperCase(), valor: aNumero(n.valor), estado: n.estado || 'Nuevo',
+            situacion: 'ACTIVO', creado: mov.registrado, alta: mov.numero, fecha_alta: mov.fecha, causal_alta: mov.causal });
+        bienes.push(b);
+        return detalleDe(b, null, { situacion: 'ACTIVO', estado: b.estado, ubicacion: b.ubicacion, responsable: '', origen: b.origen });
+      });
+      delete mov.nuevos;
+    } else {
+      mov.detalle = mov.items.map((c) => {
+        const r = aplicarMovimiento(mov, ctx.bienesPorCodigo[c]);
+        r.bien.actualizado = mov.registrado;
+        bienes.push(r.bien);
+        return detalleDe(ctx.bienesPorCodigo[c], r.antes, r.despues);
+      });
+    }
+    return { mov, bienes };
+  }
+
+  /** Anulación de un registro erróneo (art. 24): solo si ningún bien tuvo actos posteriores.
+   *  Devuelve {errores}, {bloqueados} o {mov, bienes:[{codigo, borrar}|{codigo, valor}]} */
+  function prepararAnulacion(mov, bienesPorCodigo, ctx) {
+    if (mov.anulado) return { errores: ['El acto ya fue anulado.'] };
+    if (mov.tipo === 'INVENTARIO') return { errores: ['La regularización por inventario no se anula: registre un acto correctivo.'] };
+    const motivo = limpiar(ctx.motivo); const documento = limpiar(ctx.documento);
+    if (!motivo) return { errores: ['Indique el motivo de la anulación.'] };
+    if (mov.tipo === 'ALTA' && !documento) return { errores: ['La eliminación del registro de un bien requiere la resolución de la OGA (art. 24.2).'] };
+    const bloqueados = mov.detalle.filter((d) => {
+      const b = bienesPorCodigo[d.codigo];
+      if (!b) return true;
+      return CAMPOS_TRAZABLES.some((k) => k in d.despues && (b[k] || '') !== (d.despues[k] || ''));
+    });
+    if (bloqueados.length) return { bloqueados };
+    const ahora = ctx.ahora || new Date().toISOString();
+    const bienes = mov.detalle.map((d) => d.antes === null ? { codigo: d.codigo, borrar: true }
+      : { codigo: d.codigo, valor: Object.assign({}, bienesPorCodigo[d.codigo], d.antes, { actualizado: ahora }) });
+    return { mov: Object.assign({}, mov, { anulado: { fecha: ctx.hoy || hoyISO(), usuario: ctx.usuario, motivo, documento } }), bienes };
+  }
+
+  /** Corrección de datos descriptivos (art. 22.2); el valor exige resolución (art. 25). */
+  const CAMPOS_CORREGIBLES = ['codigo_interno', 'descripcion', 'marca', 'modelo', 'serie', 'medidas', 'color', 'nro_orden', 'cuenta_contable', 'poliza', 'poliza_vence', 'origen', 'observaciones'];
+  function prepararCorreccion(bien, cambiosEntrada, ctx) {
+    if (!limpiar(ctx.motivo)) return { errores: ['Indique el motivo de la corrección.'] };
+    const nuevo = Object.assign({}, bien); const cambios = [];
+    CAMPOS_CORREGIBLES.forEach((k) => {
+      if (!(k in cambiosEntrada)) return;
+      const v = limpiar(cambiosEntrada[k]);
+      if (v !== (bien[k] || '')) { cambios.push(`${k}: "${bien[k] || ''}" → "${v}"`); nuevo[k] = v; }
+    });
+    if (nuevo.origen && !ORIGENES[nuevo.origen]) return { errores: ['Titularidad no válida.'] };
+    if ('valor' in cambiosEntrada) {
+      const valor = aNumero(cambiosEntrada.valor);
+      if (valor !== Number(bien.valor)) {
+        if (!limpiar(ctx.resolucion)) return { errores: ['La modificación del valor requiere la resolución de la OGA, sustentada en un informe técnico (art. 25).'] };
+        if (!(valor > 0)) return { errores: ['El valor debe ser mayor a 0.'] };
+        cambios.push(`valor: ${bien.valor} → ${valor} (${limpiar(ctx.resolucion)}, art. 25)`); nuevo.valor = valor;
+      }
+    }
+    nuevo.actualizado = ctx.ahora || new Date().toISOString();
+    return { bien: nuevo, cambios };
+  }
+
+  /** Cierre de inventario o supervisión: resultados y acto de regularización (art. 35.6.a) */
+  function prepararCierreInventario(inv, bienes, ctx) {
+    if (inv.estado !== 'ABIERTO') return { errores: ['El proceso ya está cerrado.'] };
+    const universo = bienes.filter((b) => SITUACIONES_INVENTARIABLES.includes(b.situacion));
+    const r = resultadosInventario(universo, inv.verif || {});
+    const reg = regularizacionInventario(r);
+    const cods = (a) => a.map((b) => b.codigo);
+    const resultados = { conformes: cods(r.conformes), faltantes: cods(r.faltantes), sinVerificar: cods(r.sinVerificar), bajasNoUbicadas: cods(r.bajasNoUbicadas),
+      diferencias: r.diferencias.map((d) => ({ codigo: d.bien.codigo, cambios: d.cambios })) };
+    const hoy = ctx.hoy || hoyISO();
+    const mov = Object.keys(reg).length ? { tipo: 'INVENTARIO', fecha: hoy, items: Object.keys(reg), regularizacion: reg, documento: inv.resolucion,
+      motivo: `Cierre de ${inv.id} (corte ${String(inv.fecha_corte || '').split('-').reverse().join('/')})` } : null;
+    return { resultados, mov, cerrado: hoy };
+  }
+
+  /** Carga inicial desde filas del Excel institucional */
+  function prepararCargaInicial(filas, codigosExistentes, ubicacionesExistentes, ctx) {
+    const existentes = new Set(codigosExistentes);
+    const ubicNuevas = new Set(); const bienes = []; let omitidos = 0;
+    filas.forEach((f) => {
+      const b = filaExcelABien(f);
+      if (!validarCodigoPatrimonial(b.codigo).ok || existentes.has(b.codigo)) { omitidos++; return; }
+      existentes.add(b.codigo);
+      b.creado = ctx.ahora || new Date().toISOString();
+      b.carga_inicial = ctx.fuente;
+      bienes.push(b);
+      if (!ubicacionesExistentes.includes(b.ubicacion)) ubicNuevas.add(b.ubicacion);
+    });
+    return { bienes, ubicaciones: [...ubicNuevas].map((nombre) => ({ nombre, piso: '', activo: true })), omitidos };
+  }
+
+  // ---------------------------------------------------------------
   // Indicadores y alertas de plazos
   // ---------------------------------------------------------------
   function indicadores(bienes, movimientos, uit, hoy) {
@@ -702,7 +827,8 @@
     causalDef, etiqueta, camposObligatorios, limpiar, hoyISO, diasHabiles, sumarMeses, aFechaISO, aNumero,
     validarCodigoPatrimonial, normalizarEstado, filaExcelABien, clasificacionContable, siguienteNumero,
     validarMovimiento, aplicarMovimiento, resultadosInventario, regularizacionInventario, evaluarSobrante,
-    indicadores, alertasNormativas
+    indicadores, alertasNormativas, hoyEnLima, prepararRegistro, prepararAnulacion, prepararCorreccion, CAMPOS_CORREGIBLES,
+    prepararCierreInventario, prepararCargaInicial
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.Core = API;

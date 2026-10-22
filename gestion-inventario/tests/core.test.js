@@ -217,3 +217,38 @@ test('el sustento legal incorpora el Reglamento de la Ley N° 29124', () => {
   assert.ok(N.BASE_LEGAL.some((b) => b[0].includes('017-2008-SA')));
   assert.ok(N.informeSustento({ entidad: 'X', establecimiento: 'Y' }).analisis.some((p) => p.includes('art. 43.f')));
 });
+
+test('operaciones compartidas navegador/servidor: registro, anulación, corrección y cierre', () => {
+  const b1 = bien({ codigo: '700000000001' });
+  const b2 = bien({ codigo: '700000000002' });
+  const ctx = { bienesPorCodigo: mapa(b1, b2), numeros: ['ASG-2026-0004'], usuario: 'ocp', ahora: '2026-10-12T10:00:00Z', hoy: HOY };
+  // registro: valida, numera y devuelve los bienes actualizados sin mutar los originales
+  const p = C.prepararRegistro({ tipo: 'ASIGNACION', fecha: HOY, items: [b1.codigo], responsable_destino: 'P1', modalidad: C.MODALIDADES_ASIGNACION[0] }, ctx);
+  assert.strictEqual(p.mov.numero, 'ASG-2026-0005');
+  assert.strictEqual(p.bienes[0].responsable, 'P1');
+  assert.strictEqual(b1.responsable, '');
+  assert.ok(C.prepararRegistro({ tipo: 'ASIGNACION', fecha: HOY, items: [b1.codigo] }, ctx).errores.length);
+  const dup = C.prepararRegistro({ tipo: 'ALTA', fecha: HOY, causal: 'Fabricación', documento: 'Inf', nuevos: [{ codigo: '700000000009', descripcion: 'a', valor: 1 }, { codigo: '700000000009', descripcion: 'b', valor: 1 }] }, ctx);
+  assert.ok(dup.errores[0].includes('repetido'));
+  // anulación: revierte; bloqueada si hubo actos posteriores; el alta exige resolución
+  const asignado = p.bienes[0];
+  const an = C.prepararAnulacion(p.mov, mapa(asignado), { usuario: 'admin', motivo: 'error', hoy: HOY });
+  assert.strictEqual(an.bienes[0].valor.responsable, '');
+  assert.ok(an.mov.anulado);
+  const movido = Object.assign({}, asignado, { ubicacion: 'OTRA' });
+  assert.ok(C.prepararAnulacion(p.mov, mapa(movido), { usuario: 'admin', motivo: 'error' }).bloqueados.length);
+  const alta = C.prepararRegistro({ tipo: 'ALTA', fecha: HOY, causal: 'Fabricación', documento: 'Inf', nuevos: [{ codigo: '700000000009', descripcion: 'mesa', valor: 10 }] }, ctx);
+  assert.ok(C.prepararAnulacion(alta.mov, mapa(alta.bienes[0]), { motivo: 'error' }).errores[0].includes('24.2'));
+  // corrección: el valor exige resolución (art. 25)
+  assert.ok(C.prepararCorreccion(b1, { valor: 999 }, { motivo: 'x' }).errores[0].includes('art. 25'));
+  assert.strictEqual(C.prepararCorreccion(b1, { valor: 999, marca: 'X' }, { motivo: 'x', resolucion: 'RD 1' }).bien.valor, 999);
+  // cierre de inventario
+  const inv = { id: 'INVENT-2026-01', estado: 'ABIERTO', resolucion: 'RD', fecha_corte: '2026-12-31', verif: { [b1.codigo]: { encontrado: false }, [b2.codigo]: { encontrado: true, estado: 'Bueno', ubicacion: 'JEFATURA', responsable: '' } } };
+  const ci = C.prepararCierreInventario(inv, [b1, b2], { hoy: HOY });
+  assert.deepStrictEqual(ci.resultados.faltantes, [b1.codigo]);
+  assert.deepStrictEqual(ci.mov.items, [b1.codigo]);
+  assert.ok(C.prepararCierreInventario(Object.assign({}, inv, { estado: 'CERRADO' }), [], {}).errores);
+  // carga inicial: omite duplicados y crea ubicaciones nuevas
+  const carga = C.prepararCargaInicial(semilla.slice(0, 3), [semilla[0].codigo_patrimonial], [], { fuente: 'x' });
+  assert.strictEqual(carga.bienes.length, 2); assert.strictEqual(carga.omitidos, 1);
+});

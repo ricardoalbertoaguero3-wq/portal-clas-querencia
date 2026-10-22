@@ -113,7 +113,14 @@ aplicativo prepara la información y los formatos que la OCP necesita para regis
    definir si el CLAS conforma su propia Comisión o se integra a la de la UE, y si el plazo es el 15/03 o el 31/03.
 5. **Plan de mantenimiento.** El Reglamento pide un plan anual (art. 81.d) y la Directiva uno multianual de al menos
    3 años (art. 86). El plan anual puede entenderse como el tramo de un año del plan multianual.
-6. **Vigencia.** Verificar si la Directiva (2021) o el Reglamento (2008) tienen modificatorias posteriores.
+6. **Protección de datos personales (Ley N° 29733).** La versión multiusuario guarda en Cloudflare, con centros de
+   datos fuera del Perú, los nombres, el DNI y el correo de los servidores. Confirme con la OAJ:
+   - si debe inscribirse el banco de datos ante la Autoridad Nacional de Protección de Datos Personales;
+   - si corresponde informar a los servidores o recabar su consentimiento;
+   - si el nivel de protección del proveedor es suficiente para el flujo transfronterizo.
+
+   El aplicativo solo almacena los datos indispensables para el Anexo N° 03.
+7. **Vigencia.** Verificar si la Directiva (2021) o el Reglamento (2008) tienen modificatorias posteriores.
 
 ## 7. Situación actual del inventario 2025
 

@@ -1,0 +1,8 @@
+/*
+  X-Robots-Tag: noindex, nofollow
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+
+/docs/*
+  Cache-Control: private, max-age=3600

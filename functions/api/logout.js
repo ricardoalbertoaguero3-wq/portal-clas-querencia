@@ -1,6 +1,6 @@
-import { clearSessionCookie, json } from '../../lib/auth.js';
+import { clearCookie, json } from '../../lib/auth.js';
 
-// Cierra la sesión del portal; el navegador luego cierra la de Access en /cdn-cgi/access/logout.
+// Cierra la sesión del portal y descarta un correo verificado a medio ingreso.
 export async function onRequestPost() {
-  return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+  return json({ ok: true }, 200, [clearCookie('session'), clearCookie('pre')]);
 }

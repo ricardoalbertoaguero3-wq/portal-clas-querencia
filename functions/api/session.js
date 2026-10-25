@@ -1,14 +1,11 @@
-import { isConfigured, getAccessEmail, getSessionEmail, json } from '../../lib/auth.js';
+import { isConfigured, getCookieEmail, json } from '../../lib/auth.js';
 
-// Estado del ingreso: correo verificado por Access y si ya se validó la clave.
+// Paso en el que está el usuario: "correo" (sin verificar), "clave" (código validado) o "listo" (sesión abierta).
 export async function onRequestGet({ request, env }) {
   if (!isConfigured(env)) return json({ ok: false, error: 'config' });
-  try {
-    const email = await getAccessEmail(request, env);
-    if (!email) return json({ ok: false, error: 'access' });
-    const sessionEmail = await getSessionEmail(request, env);
-    return json({ ok: true, email, unlocked: sessionEmail === email });
-  } catch (e) {
-    return json({ ok: false, error: 'verify' }, 503);
-  }
+  const sessionEmail = await getCookieEmail(request, 'session', env);
+  if (sessionEmail) return json({ ok: true, stage: 'listo', email: sessionEmail });
+  const preEmail = await getCookieEmail(request, 'pre', env);
+  if (preEmail) return json({ ok: true, stage: 'clave', email: preEmail });
+  return json({ ok: true, stage: 'correo' });
 }

@@ -72,7 +72,7 @@
   .logo-circle img{ width:100%; height:100%; object-fit:cover; }
   .lock-card h1{ font-size:24px; margin:0 0 4px; color:var(--ink); }
   .lock-card .sub{ font-size:14px; color:var(--muted); margin:0 0 26px; }
-  .lock-card input[type="password"]{
+  .lock-card input{
     width:100%;
     padding:12px 14px;
     font-family:'Lora',serif;
@@ -82,7 +82,8 @@
     outline:none;
     margin-bottom:10px;
   }
-  .lock-card input[type="password"]:focus{ border-color:var(--gold); }
+  .lock-card input:focus{ border-color:var(--gold); }
+  #codeInput{ text-align:center; letter-spacing:6px; font-size:20px; }
   .lock-card button{
     width:100%;
     padding:12px 14px;
@@ -111,11 +112,19 @@
   .lock-email{ font-size:13.5px; color:var(--ink); margin:0 0 14px; word-break:break-all; }
   .lock-msg{ font-size:13.5px; line-height:1.6; color:var(--danger); background:var(--danger-bg); border:1px solid #e7c9c4; border-radius:8px; padding:12px 14px; margin:0; display:none; }
   .lock-msg.show{ display:block; }
-  #pwForm.hidden{ display:none; }
+  .lock-form.hidden{ display:none; }
+  .lock-error.info{ color:#2f6b3a; }
+  .lock-links{ font-size:12.5px; color:var(--muted); margin:14px 0 0; }
+  .lock-card .link-btn{
+    width:auto; padding:0; background:none; color:var(--muted);
+    font-size:12.5px; font-weight:400; text-decoration:underline;
+  }
+  .lock-card .link-btn:hover{ background:none; color:var(--ink); }
+  .lock-card .link-btn:disabled{ text-decoration:none; }
   .lock-card button:disabled{ opacity:.6; cursor:default; }
   .lock-foot{ font-size:12px; color:var(--muted); margin-top:22px; }
   .lock-copyright{ font-size:11px; color:#a39d92; margin-top:10px; }
-  /* Mientras se verifica Cloudflare Access no se muestra la tarjeta de clave */
+  /* Mientras se consulta el estado de la sesión no se muestra la tarjeta de ingreso */
   body.checking .lock-card{ visibility:hidden; }
 
   /* ---------- Portal ---------- */
@@ -524,15 +533,29 @@
       <h1>CLAS Agregado La Querencia</h1>
       <p class="sub">Portal de Documentos de Gestión<br>Acceso solo para personal institucional</p>
       <div class="lock-steps" id="lockSteps" aria-hidden="true" style="display:none;">
-        <span class="lock-step done">1 · Correo y código ✓</span>
-        <span class="lock-step current">2 · Clave</span>
+        <span class="lock-step" data-step="correo">1 · Correo</span>
+        <span class="lock-step" data-step="codigo">2 · Código</span>
+        <span class="lock-step" data-step="clave">3 · Clave</span>
       </div>
       <p class="lock-msg" id="lockMsg"></p>
-      <div id="pwForm" class="hidden">
+      <div id="emailForm" class="lock-form hidden">
+        <input type="email" id="emailInput" placeholder="Correo electrónico" autocomplete="email" inputmode="email">
+        <button id="emailSubmit">Enviar código</button>
+        <p class="lock-error" id="emailError"></p>
+      </div>
+      <div id="codeForm" class="lock-form hidden">
+        <p class="lock-email">Si el correo está autorizado, te llegará un código de 6 dígitos a <strong id="codeEmail"></strong>. Revisa también la carpeta de spam.</p>
+        <input type="text" id="codeInput" placeholder="000000" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+        <button id="codeSubmit">Verificar código</button>
+        <p class="lock-error" id="codeError"></p>
+        <p class="lock-links"><button type="button" class="link-btn" id="codeResend">Reenviar código</button> · <button type="button" class="link-btn" id="codeChange">Cambiar correo</button></p>
+      </div>
+      <div id="pwForm" class="lock-form hidden">
         <p class="lock-email">Correo verificado: <strong id="lockEmail"></strong></p>
         <input type="password" id="pwInput" placeholder="Clave de acceso" autocomplete="current-password">
         <button id="pwSubmit">Ingresar</button>
-        <p class="lock-error" id="pwError">Clave incorrecta. Intenta nuevamente.</p>
+        <p class="lock-error" id="pwError"></p>
+        <p class="lock-links"><button type="button" class="link-btn" id="pwChange">Usar otro correo</button></p>
       </div>
       <p class="lock-foot">Si no cuentas con acceso, solicítalo al Área de Administración.</p>
       <p class="lock-copyright">© <span id="yearLock"></span> CLAS Agregado La Querencia. Todos los derechos reservados.<br>Elaborado por Lic. Adm. Ricardo A. Agüero Angulo.</p>
@@ -663,7 +686,7 @@
   // El botón "+ Importar" solo se muestra abriendo el portal con ?admin en la URL
   var ADMIN_MODE = /[?&]admin(=|&|$)/.test(location.search);
 
-  // Correo del usuario con sesión abierta (verificado por Cloudflare Access y con clave validada en el servidor)
+  // Correo del usuario con sesión abierta (correo + código + clave validados en el servidor)
   var accessEmail = null;
 
   if (window['pdfjsLib']) {
@@ -718,9 +741,15 @@
   var pwInput = document.getElementById("pwInput");
   var pwSubmit = document.getElementById("pwSubmit");
   var pwError = document.getElementById("pwError");
-  var pwForm = document.getElementById("pwForm");
   var lockMsg = document.getElementById("lockMsg");
   var lockEmail = document.getElementById("lockEmail");
+  var emailInput = document.getElementById("emailInput");
+  var emailSubmit = document.getElementById("emailSubmit");
+  var emailError = document.getElementById("emailError");
+  var codeInput = document.getElementById("codeInput");
+  var codeSubmit = document.getElementById("codeSubmit");
+  var codeError = document.getElementById("codeError");
+  var codeResend = document.getElementById("codeResend");
   var lockBtn = document.getElementById("lockBtn");
   var overlay = document.getElementById("viewerOverlay");
   var viewerTitle = document.getElementById("viewerTitle");
@@ -745,93 +774,222 @@
   function showLock(){
     portal.style.display = "none";
     lockScreen.style.display = "flex";
-    pwInput.value = "";
-    pwError.classList.remove("show");
+  }
+
+  /* ---- Ingreso: 1) correo  2) código enviado al correo  3) clave — todo validado en el servidor ---- */
+  var LOCK_FORMS = ["emailForm", "codeForm", "pwForm"];
+  var STEPS = ["correo", "codigo", "clave"];
+  var pendingEmail = "";   // correo al que se envió el último código
+  var resendTimer = null;
+
+  var ERRORS = {
+    config: "El portal aún no está configurado. Comunícate con el Área de Administración.",
+    correo: "Escribe un correo electrónico válido.",
+    limite: "Demasiados intentos. Espera unos minutos e intenta nuevamente.",
+    espera: "Ya se envió un código hace menos de un minuto. Revisa tu correo o espera para reenviarlo.",
+    envio: "No se pudo enviar el código. Intenta nuevamente en unos minutos.",
+    expirado: "El código venció o no es válido. Solicita uno nuevo con \"Reenviar código\".",
+    intentos: "Se agotaron los intentos para este código. Solicita uno nuevo con \"Reenviar código\".",
+    codigo: "Código incorrecto.",
+    clave: "Clave incorrecta. Intenta nuevamente.",
+    sesion: "La verificación de tu correo venció. Vuelve a ingresar tu correo.",
+    red: "No se pudo conectar con el portal. Revisa tu conexión e intenta nuevamente."
+  };
+  function errorText(res){
+    var msg = ERRORS[res && res.error] || "No se pudo completar la operación. Intenta nuevamente.";
+    if(res && res.error === "codigo" && res.restantes) msg += " Te quedan " + res.restantes + " intento(s).";
+    return msg;
+  }
+
+  // Devuelve el JSON de la API, null si el sitio no tiene funciones de servidor, o {error:"red"} sin conexión
+  function api(path, body){
+    var opts = { credentials:"same-origin", cache:"no-store" };
+    if(body){
+      opts.method = "POST";
+      opts.headers = { "Content-Type":"application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(path, opts).then(function(r){
+      var type = r.headers.get("Content-Type") || "";
+      return type.indexOf("application/json") >= 0 ? r.json() : null;
+    }).catch(function(){ return { ok:false, error:"red" }; });
+  }
+
+  function busy(btn, text){
+    var original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = text;
+    return function(){ btn.disabled = false; btn.textContent = original; };
+  }
+
+  function setMessage(el, msg, info){
+    el.textContent = msg || "";
+    el.classList.toggle("show", !!msg);
+    el.classList.toggle("info", !!info);
+  }
+
+  function showStep(step, formId){
+    showLock();
+    setMessage(lockMsg, "");
+    var current = STEPS.indexOf(step);
+    var steps = document.getElementById("lockSteps");
+    steps.style.display = "";
+    Array.prototype.forEach.call(steps.children, function(el){
+      var i = STEPS.indexOf(el.getAttribute("data-step"));
+      el.classList.toggle("done", i < current);
+      el.classList.toggle("current", i === current);
+    });
+    LOCK_FORMS.forEach(function(id){ document.getElementById(id).classList.toggle("hidden", id !== formId); });
+    [emailError, codeError, pwError].forEach(function(el){ setMessage(el, ""); });
   }
 
   function showLockMessage(msg){
     showLock();
-    pwForm.classList.add("hidden");
     document.getElementById("lockSteps").style.display = "none";
-    lockMsg.textContent = msg;
-    lockMsg.classList.add("show");
+    LOCK_FORMS.forEach(function(id){ document.getElementById(id).classList.add("hidden"); });
+    setMessage(lockMsg, msg);
+  }
+
+  function showEmailStep(msg){
+    showStep("correo", "emailForm");
+    if(msg) setMessage(emailError, msg);
+    emailInput.focus();
+  }
+
+  function showCodeStep(email){
+    showStep("codigo", "codeForm");
+    document.getElementById("codeEmail").textContent = email;
+    codeInput.value = "";
+    codeInput.focus();
   }
 
   function showPasswordStep(email){
-    showLock();
-    lockMsg.classList.remove("show");
+    showStep("clave", "pwForm");
     lockEmail.textContent = email;
-    document.getElementById("lockSteps").style.display = "";
-    pwForm.classList.remove("hidden");
+    pwInput.value = "";
     pwInput.focus();
   }
 
-  /* ---- Ingreso: 1) correo + código (Cloudflare Access)  2) clave validada en el servidor ---- */
+  function startResendCooldown(){
+    var left = 60;
+    clearInterval(resendTimer);
+    codeResend.disabled = true;
+    codeResend.textContent = "Reenviar código (" + left + " s)";
+    resendTimer = setInterval(function(){
+      left--;
+      if(left <= 0){
+        clearInterval(resendTimer);
+        codeResend.disabled = false;
+        codeResend.textContent = "Reenviar código";
+      } else {
+        codeResend.textContent = "Reenviar código (" + left + " s)";
+      }
+    }, 1000);
+  }
+
   function checkSession(){
-    fetch("/api/session", { credentials:"same-origin", cache:"no-store" })
-      .then(function(r){
-        var type = r.headers.get("Content-Type") || "";
-        return type.indexOf("application/json") >= 0 ? r.json() : null;
-      })
-      .catch(function(){ return null; })
-      .then(function(st){
-        document.body.classList.remove("checking");
-        if(!st){
-          // Sin funciones de servidor (otro hosting o archivo abierto en local)
-          showLockMessage("Este portal solo funciona desde su dirección oficial: portal-clas-querencia.pages.dev");
-        } else if(st.ok && st.unlocked){
-          accessEmail = st.email;
-          document.getElementById("userEmail").textContent = st.email;
-          showPortal();
-        } else if(st.ok){
-          showPasswordStep(st.email);
-        } else if(st.error === "access"){
-          showLockMessage("No se verificó tu correo. Cierra esta pestaña y vuelve a abrir el portal para ingresar tu correo y el código que te llegará.");
-        } else if(st.error === "config"){
-          showLockMessage("El portal aún no está configurado. Comunícate con el Área de Administración.");
-        } else {
-          showLockMessage("No se pudo verificar el acceso en este momento. Intenta nuevamente en unos minutos.");
-        }
-      });
+    api("/api/session").then(function(st){
+      document.body.classList.remove("checking");
+      if(!st){
+        // Sin funciones de servidor (otro hosting o archivo abierto en local)
+        showLockMessage("Este portal solo funciona desde su dirección oficial: portal-clas-querencia.pages.dev");
+      } else if(!st.ok){
+        showLockMessage(errorText(st));
+      } else if(st.stage === "listo"){
+        accessEmail = st.email;
+        document.getElementById("userEmail").textContent = st.email;
+        showPortal();
+      } else if(st.stage === "clave"){
+        showPasswordStep(st.email);
+      } else {
+        showEmailStep();
+      }
+    });
+  }
+
+  function requestCode(email, onDone){
+    api("/api/request-code", { email: email }).then(function(res){
+      if(res && res.ok){ pendingEmail = email; startResendCooldown(); }
+      onDone(res || { ok:false });
+    });
+  }
+
+  function submitEmail(){
+    var email = emailInput.value.trim().toLowerCase();
+    if(!email || emailSubmit.disabled) return;
+    var done = busy(emailSubmit, "Enviando…");
+    requestCode(email, function(res){
+      done();
+      if(res.ok){ showCodeStep(email); }
+      else if(res.error === "espera"){
+        // Ya hay un código reciente para este correo: se pasa a escribirlo, con el reenvío en espera
+        pendingEmail = email;
+        showCodeStep(email);
+        setMessage(codeError, errorText(res));
+        startResendCooldown();
+      }
+      else { setMessage(emailError, errorText(res)); }
+    });
+  }
+
+  function submitCode(){
+    var code = codeInput.value.replace(/\D/g, "");
+    if(code.length !== 6){ setMessage(codeError, "Escribe los 6 dígitos del código."); return; }
+    if(codeSubmit.disabled) return;
+    var done = busy(codeSubmit, "Verificando…");
+    api("/api/verify-code", { email: pendingEmail, code: code }).then(function(res){
+      done();
+      if(res && res.ok){ showPasswordStep(res.email); }
+      else { setMessage(codeError, errorText(res)); codeInput.select(); }
+    });
+  }
+
+  function resendCode(){
+    if(!pendingEmail || codeResend.disabled) return;
+    codeResend.disabled = true;
+    requestCode(pendingEmail, function(res){
+      if(res.ok){ setMessage(codeError, "Se envió un nuevo código. Usa el más reciente.", true); codeInput.value = ""; codeInput.focus(); }
+      else { codeResend.disabled = false; setMessage(codeError, errorText(res)); }
+    });
   }
 
   function tryUnlock(){
     if(!pwInput.value || pwSubmit.disabled) return;
-    pwSubmit.disabled = true;
-    pwSubmit.textContent = "Verificando…";
-    fetch("/api/login", {
-      method:"POST",
-      credentials:"same-origin",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ clave: pwInput.value })
-    })
-      .then(function(r){ return r.json().catch(function(){ return { ok:false }; }); })
-      .catch(function(){ return { ok:false, error:"red" }; })
-      .then(function(res){
-        pwSubmit.disabled = false;
-        pwSubmit.textContent = "Ingresar";
-        if(res.ok){
-          pwInput.value = "";
-          checkSession();
-        } else if(res.error === "clave"){
-          pwError.textContent = "Clave incorrecta. Intenta nuevamente.";
-          pwError.classList.add("show");
-          pwInput.select();
-        } else {
-          pwError.textContent = "No se pudo verificar la clave. Recarga la página e intenta nuevamente.";
-          pwError.classList.add("show");
-        }
-      });
+    var done = busy(pwSubmit, "Verificando…");
+    api("/api/login", { clave: pwInput.value }).then(function(res){
+      done();
+      if(res && res.ok){ pwInput.value = ""; checkSession(); }
+      else if(res && res.error === "sesion"){ showEmailStep(errorText(res)); }
+      else { setMessage(pwError, errorText(res)); pwInput.select(); }
+    });
   }
+
+  // Vuelve al paso del correo descartando un ingreso a medias
+  function restartLogin(){
+    api("/api/logout", {}).then(function(){
+      pendingEmail = "";
+      clearInterval(resendTimer);
+      showEmailStep();
+    });
+  }
+
+  emailSubmit.addEventListener("click", submitEmail);
+  codeSubmit.addEventListener("click", submitCode);
   pwSubmit.addEventListener("click", tryUnlock);
-  pwInput.addEventListener("keydown", function(e){
-    if(e.key === "Enter") tryUnlock();
-    else pwError.classList.remove("show");
-  });
+  codeResend.addEventListener("click", resendCode);
+  document.getElementById("codeChange").addEventListener("click", restartLogin);
+  document.getElementById("pwChange").addEventListener("click", restartLogin);
+  emailInput.addEventListener("keydown", function(e){ if(e.key === "Enter") submitEmail(); });
+  codeInput.addEventListener("keydown", function(e){ if(e.key === "Enter") submitCode(); });
+  pwInput.addEventListener("keydown", function(e){ if(e.key === "Enter") tryUnlock(); });
   lockBtn.addEventListener("click", function(){
-    fetch("/api/logout", { method:"POST", credentials:"same-origin" })
-      .catch(function(){})
-      .then(function(){ location.href = "/cdn-cgi/access/logout"; });
+    api("/api/logout", {}).then(function(){
+      accessEmail = null;
+      pendingEmail = "";
+      document.getElementById("userEmail").textContent = "";
+      emailInput.value = "";
+      checkSession();
+    });
   });
 
   /* ---- IndexedDB para importaciones locales ---- */
@@ -1215,7 +1373,7 @@
     }).catch(function(err){
       if(seq !== loadSeq) return;
       if(err && (err.status === 401 || err.status === 503)){
-        // La sesión venció (8 h) o se cambió la clave: volver a la pantalla de ingreso
+        // La sesión venció (8 h), se cambió la clave o el correo salió de la lista: volver al ingreso
         closeViewer();
         accessEmail = null;
         checkSession();
@@ -1231,7 +1389,7 @@
   }
 
   function drawWatermark(){
-    // Con Cloudflare Access la marca identifica a quien visualiza: una captura queda trazable a su correo
+    // La marca identifica a quien visualiza: una captura queda trazable a su correo
     var text = accessEmail
       ? "CLAS AGREGADO LA QUERENCIA · " + accessEmail + " · " + new Date().toLocaleDateString("es-PE")
       : "CLAS AGREGADO LA QUERENCIA · USO INTERNO · NO REPRODUCIR";

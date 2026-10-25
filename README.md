@@ -2,14 +2,15 @@
 
 Portal institucional de solo lectura para consultar los documentos de gestión
 mensuales del CLAS Agregado La Querencia. Es un sitio estático, sin base de
-datos. Se publica en **Cloudflare Pages**; el ingreso tiene dos pasos:
+datos. Se publica en **Cloudflare Pages**; el ingreso tiene tres pasos:
 
-1. **Correo + código:** Cloudflare Access pide el correo y envía un código de
-   un solo uso. Solo entran los correos de la lista autorizada.
-2. **Clave institucional:** se valida en el servidor (Pages Functions). La
-   clave no figura en el código de la página.
+1. **Correo:** la persona escribe su correo. Si está en la lista autorizada,
+   recibe un código de 6 dígitos enviado desde claslaquerencia@gmail.com.
+2. **Código:** lo ingresa en el portal (vence en 10 minutos, 5 intentos).
+3. **Clave institucional:** se valida en el servidor. La clave no figura en
+   el código de la página.
 
-Los PDF solo se entregan a quien completó ambos pasos. Fuera de Cloudflare
+Los PDF solo se entregan a quien completó los tres pasos. Fuera de Cloudflare
 Pages (por ejemplo, GitHub Pages o abriendo el archivo en local) el portal
 no permite ingresar.
 
@@ -19,9 +20,10 @@ no permite ingresar.
 /
 ├── index.html          ← el portal completo (HTML + CSS + JS, un solo archivo)
 ├── functions/           ← funciones del servidor (Cloudflare Pages Functions)
-│   ├── _middleware.js   ← exige correo + clave para todo salvo la portada y el logo
-│   └── api/             ← session.js, login.js, logout.js
-├── lib/auth.js          ← verificación del JWT de Access y sesión firmada
+│   ├── _middleware.js   ← exige sesión para todo salvo la portada, el logo y la API de ingreso
+│   └── api/             ← session, request-code, verify-code, login, logout
+├── lib/auth.js          ← lista autorizada, códigos, límites de intentos y sesiones firmadas
+├── apps-script/Code.gs  ← script de Google que envía los códigos por correo
 ├── worker/index.js      ← API opcional en Cloudflare Worker + R2 (aún no desplegada)
 ├── wrangler.toml        ← configuración del Worker
 ├── _headers             ← cabeceras HTTP para Cloudflare Pages (GitHub Pages lo ignora)
@@ -40,18 +42,22 @@ no permite ingresar.
 ## Cómo funciona
 
 - **Acceso:**
-  - Cloudflare Access verifica el correo (código de un solo uso). El servidor
-    comprueba la firma de ese ingreso (JWT) con las variables
-    `ACCESS_TEAM_DOMAIN` y `ACCESS_AUD`.
-  - Luego el portal pide la clave institucional y la envía a `/api/login`,
-    que la compara con `PORTAL_PASSWORD`. Si es correcta, entrega una sesión
-    firmada (cookie HttpOnly) válida por **8 horas** y ligada a ese correo.
-  - Cada solicitud de un PDF u otro archivo pasa por `functions/_middleware.js`,
-    que exige correo verificado + sesión del mismo correo. Sin ambos responde
-    401. Solo la portada (`/`) y el logo son públicos.
-  - "Cerrar sesión" borra la sesión del portal y la de Access.
-  - Una clave incorrecta demora la respuesta casi un segundo, para frenar
-    intentos repetidos.
+  - `/api/request-code`: si el correo está en `ALLOWED_EMAILS`, genera un
+    código de 6 dígitos, guarda solo su huella (hash) en Cloudflare KV y lo
+    envía mediante Google Apps Script. Ante un correo no autorizado responde
+    igual, sin enviar nada, para no revelar quién está en la lista.
+  - Límites: un envío por minuto y 5 por hora por correo, 20 por hora por
+    conexión. El código vence en 10 minutos y admite 5 intentos.
+  - `/api/verify-code`: valida el código y habilita el paso de la clave por
+    15 minutos.
+  - `/api/login`: compara la clave con `PORTAL_PASSWORD` (10 intentos por
+    hora por correo) y entrega una sesión firmada (cookie HttpOnly) de
+    **8 horas**, ligada al correo. Registra el ingreso en KV.
+  - Cada solicitud de un PDF u otro archivo pasa por
+    `functions/_middleware.js`, que exige sesión vigente de un correo que
+    siga en la lista. Sin ella responde 401.
+  - "Cerrar sesión" borra la sesión; para volver a entrar se repiten los
+    tres pasos.
 - **Visor:** cada documento se abre en un visor propio (PDF.js), página por
   página, también en celulares, con zoom (− / +), flechas del teclado y
   deslizamiento lateral en pantallas táctiles. No hay botón de descarga ni
@@ -100,72 +106,89 @@ administración al pie de la página.
 Mismo archivo `index.html`, bloque `DATA.jefes`, un poco más abajo de
 `DATA.categorias`.
 
-## Configuración en Cloudflare
+## Configuración (una sola vez)
 
-Gratuito hasta 50 usuarios. El proyecto de Cloudflare Pages ya está conectado
-a este repositorio (rama de producción `main`; *Framework preset* None, sin
-comando de compilación, directorio de salida `/`).
+Todo es gratuito y no requiere tarjeta. Se trabaja con la cuenta
+**claslaquerencia@gmail.com**, tanto en Google como en Cloudflare (es la
+cuenta donde está el proyecto `portal-clas-querencia` de Cloudflare Pages).
+Cloudflare Zero Trust / Access **no** se usa.
 
-### 1. Aplicación de Access (correo + código)
-1. **Zero Trust → Settings → Authentication → Login methods:** activo
-   **One-time PIN**.
-2. **Zero Trust → Access → Applications → Self-hosted** (crear o editar):
-   - Dominio 1: subdominio `portal-clas-querencia`, dominio `pages.dev`,
-     **ruta vacía**. Si se pone una ruta (p. ej. `docs`), la portada queda
-     fuera de Access y nadie podrá ingresar.
-   - Dominio 2: subdominio `*.portal-clas-querencia`, dominio `pages.dev`,
-     ruta vacía (versiones de prueba de cada rama).
-   - *Session duration:* por ejemplo 24 horas.
-3. Política: *Action* **Allow**, regla **Emails** con la lista exacta de
-   correos autorizados.
-4. En la ficha de la aplicación, copiar el **Application Audience (AUD)
-   Tag**. Anotar también el **nombre de equipo** de Zero Trust (Settings →
-   Custom Pages o Settings → General): el dominio es
-   `<equipo>.cloudflareaccess.com`.
-5. Opcional, para que la pantalla de Cloudflare lleve la identidad del CLAS:
-   en **Settings → Custom Pages → Login page** (el nombre del menú puede
-   variar) poner el nombre "CLAS Agregado La Querencia", el logo
-   (`https://portal-clas-querencia.pages.dev/docs/logo.png`) y el color
-   `#201f1d`.
+Antes de empezar, generar el **secreto del envío de correos**: en Chrome
+pulsar F12 → pestaña *Console*, escribir `crypto.randomUUID()` y Enter
+(si Chrome no deja pegar, escribir antes `allow pasting`). Copiar el
+resultado sin comillas. Repetir para obtener un segundo valor, que será el
+**secreto de sesión**.
 
-### 2. Variables del servidor (clave y verificación)
-En **Workers & Pages → portal-clas-querencia → Settings → Variables and
-Secrets**, entorno **Production** (y también **Preview** si se usan las
-versiones de prueba):
+### 1. Envío de códigos (Google Apps Script)
+1. Con claslaquerencia@gmail.com abrir https://script.google.com →
+   **Nuevo proyecto**. Nombrarlo "Portal CLAS - códigos".
+2. Borrar el contenido del editor y pegar el de `apps-script/Code.gs` de
+   este repositorio.
+3. En la línea `const SECRET = '…'` reemplazar el texto entre comillas por el
+   secreto del envío de correos. Guardar (ícono de disco).
+4. En la barra superior elegir la función **probarEnvio** → **Ejecutar**.
+   Google pedirá permisos: *Revisar permisos* → elegir la cuenta → si
+   aparece "Google no verificó esta app", *Configuración avanzada* → *Ir a
+   Portal CLAS - códigos* → **Permitir**. Debe llegar un correo de prueba a
+   claslaquerencia@gmail.com.
+5. **Implementar → Nueva implementación** → tipo **Aplicación web**:
+   *Ejecutar como:* **Yo**; *Quién tiene acceso:* **Cualquier usuario** →
+   **Implementar**. Copiar la **URL de la aplicación web** (termina en
+   `/exec`).
+
+Si más adelante se modifica el script: *Implementar → Gestionar
+implementaciones* → lápiz → *Versión: Nueva versión* → Implementar (la URL
+no cambia).
+
+### 2. Almacenamiento de códigos (Cloudflare KV)
+1. En https://dash.cloudflare.com (cuenta claslaquerencia@gmail.com):
+   **Storage & databases → Workers KV → Create instance** (o *Create
+   namespace*), nombre `portal-clas-auth`.
+2. **Compute → Workers & Pages → portal-clas-querencia → Settings →
+   Bindings → Add → KV namespace**: *Variable name* `AUTH_KV`, *KV
+   namespace* `portal-clas-auth`. Hacerlo en **Production** y en
+   **Preview**.
+
+### 3. Variables del portal
+En **portal-clas-querencia → Settings → Variables and Secrets**, en
+**Production** y en **Preview**:
 
 | Variable | Tipo | Valor |
 |---|---|---|
-| `ACCESS_TEAM_DOMAIN` | Texto | `<equipo>.cloudflareaccess.com` |
-| `ACCESS_AUD` | Texto | el AUD Tag del paso 1.4 |
+| `ALLOWED_EMAILS` | Texto | correos autorizados separados por comas, p. ej. `persona1@gmail.com, persona2@gmail.com` |
 | `PORTAL_PASSWORD` | **Secreto** | la clave institucional (nueva; la anterior estuvo publicada en el código) |
-| `SESSION_SECRET` | **Secreto** | cadena aleatoria de 40 caracteres o más (no hace falta recordarla) |
+| `SESSION_SECRET` | **Secreto** | el secreto de sesión |
+| `MAIL_WEBHOOK_URL` | Texto | la URL `/exec` del paso 1.5 |
+| `MAIL_WEBHOOK_SECRET` | **Secreto** | el secreto del envío de correos (el mismo del paso 1.3) |
 
-Las variables se aplican en el **siguiente despliegue**: después de
-guardarlas, ir a **Deployments** y usar **Retry deployment** en el último, o
-hacer cualquier commit. Si falta alguna, el portal muestra "El portal aún no
-está configurado" y no entrega ningún PDF.
+### 4. Aplicar y probar
+1. **Deployments** → en el último despliegue, menú **⋯ → Retry
+   deployment** (las variables y el KV solo se aplican en un despliegue
+   nuevo).
+2. En una ventana privada abrir el portal: pedir el código con un correo de
+   la lista, ingresarlo y luego la clave. Debe abrirse el portal con el
+   correo en la cabecera y en la marca de agua.
+3. Si aparece "El portal aún no está configurado", falta una variable o el
+   enlace `AUTH_KV`. Si aparece "No se pudo enviar el código", revisar la URL
+   y que el secreto sea idéntico en Apps Script y en `MAIL_WEBHOOK_SECRET`.
 
-### 3. Comprobación (en una ventana privada)
-1. Abrir `https://portal-clas-querencia.pages.dev`: Cloudflare pide el correo
-   y envía el código.
-2. Tras el código, el portal muestra "Correo verificado: …" y pide la clave.
-3. Con la clave correcta se abre el portal, con el correo en la cabecera y en
-   la marca de agua.
-4. Con un correo que no está en la lista, Cloudflare niega el acceso.
-
-### 4. Cerrar el acceso anterior
+### 5. Cerrar el acceso anterior
 En GitHub, **Settings → General → Danger Zone → Change visibility →
 Private**. En una cuenta gratuita esto desactiva GitHub Pages (si no, hacerlo
 en **Settings → Pages**). Cloudflare Pages sigue publicando desde el
 repositorio privado.
 
 ### Mantenimiento
-- **Alta o baja de personal:** editar la lista de correos de la política en
-  Zero Trust. La baja es inmediata.
-- **Cambio de clave:** cambiar `PORTAL_PASSWORD` y volver a desplegar. Todas
-  las sesiones abiertas se cierran y se pide la clave nueva.
-- **Registro de ingresos:** Zero Trust → Logs → Access muestra quién entró
-  y cuándo.
+- **Alta o baja de personal:** editar `ALLOWED_EMAILS` y hacer *Retry
+  deployment*. Quien salga de la lista pierde el acceso en su siguiente
+  acción, aunque tenga la sesión abierta.
+- **Cambio de clave:** cambiar `PORTAL_PASSWORD` y hacer *Retry
+  deployment*. Todas las sesiones se cierran.
+- **Registro de ingresos:** Workers KV → `portal-clas-auth` → claves que
+  empiezan con `log:` (fecha, hora y correo de cada ingreso; se conservan
+  90 días).
+- **Límite de envío:** Gmail permite unos 100 correos al día desde Apps
+  Script. Cada ingreso usa uno (la sesión dura 8 horas).
 
 ## Aviso legal
 

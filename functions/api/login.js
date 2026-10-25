@@ -1,29 +1,30 @@
-import { isConfigured, getAccessEmail, safeEqual, createSessionCookie, json } from '../../lib/auth.js';
+import {
+  isConfigured, getCookieEmail, hit, overLimit, safeEqual, createCookie, clearCookie,
+  clientIp, sleep, json, readJson,
+} from '../../lib/auth.js';
 
-// Valida la clave institucional para el correo ya verificado por Access y abre la sesión del portal.
+// Paso 3: valida la clave institucional para el correo ya verificado y abre la sesión del portal.
 export async function onRequestPost({ request, env }) {
   if (!isConfigured(env)) return json({ ok: false, error: 'config' }, 503);
 
-  let email;
-  try {
-    email = await getAccessEmail(request, env);
-  } catch (e) {
-    return json({ ok: false, error: 'verify' }, 503);
-  }
-  if (!email) return json({ ok: false, error: 'access' }, 401);
+  const email = await getCookieEmail(request, 'pre', env);
+  if (!email) return json({ ok: false, error: 'sesion' }, 401);
 
-  let clave = '';
-  try {
-    clave = String((await request.json()).clave || '');
-  } catch {
-    return json({ ok: false, error: 'formato' }, 400);
-  }
+  const failKey = `rl:pw:${email}`;
+  if (await overLimit(env, failKey, 10)) return json({ ok: false, error: 'limite' }, 429);
 
+  const body = await readJson(request);
+  const clave = String((body && body.clave) || '');
   if (!clave || !(await safeEqual(clave, env.PORTAL_PASSWORD))) {
-    // Pausa ante una clave incorrecta para frenar intentos repetidos
-    await new Promise(r => setTimeout(r, 800));
+    await hit(env, failKey, Infinity, 3600);
+    await sleep(800);
     return json({ ok: false, error: 'clave' }, 401);
   }
 
-  return json({ ok: true, email }, 200, { 'Set-Cookie': await createSessionCookie(email, env) });
+  // Registro de ingresos: se consulta en el panel de Cloudflare (KV → claves "log:"), se conserva 90 días
+  await env.AUTH_KV.put(`log:${new Date().toISOString()}:${email}`,
+    JSON.stringify({ ip: clientIp(request), agente: request.headers.get('User-Agent') || '' }),
+    { expirationTtl: 90 * 86400 });
+
+  return json({ ok: true, email }, 200, [await createCookie('session', email, env), clearCookie('pre')]);
 }

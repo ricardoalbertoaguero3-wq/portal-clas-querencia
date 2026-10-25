@@ -72,7 +72,7 @@
   .logo-circle img{ width:100%; height:100%; object-fit:cover; }
   .lock-card h1{ font-size:24px; margin:0 0 4px; color:var(--ink); }
   .lock-card .sub{ font-size:14px; color:var(--muted); margin:0 0 26px; }
-  .lock-card input[type="password"]{
+  .lock-card input{
     width:100%;
     padding:12px 14px;
     font-family:'Lora',serif;
@@ -82,7 +82,8 @@
     outline:none;
     margin-bottom:10px;
   }
-  .lock-card input[type="password"]:focus{ border-color:var(--gold); }
+  .lock-card input:focus{ border-color:var(--gold); }
+  #codeInput{ text-align:center; letter-spacing:6px; font-size:20px; }
   .lock-card button{
     width:100%;
     padding:12px 14px;
@@ -104,9 +105,26 @@
     display:none;
   }
   .lock-error.show{ display:block; }
+  .lock-steps{ display:flex; justify-content:center; gap:8px; margin:0 0 18px; font-size:12px; }
+  .lock-step{ padding:4px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted); }
+  .lock-step.done{ background:#e8f3ea; border-color:#bcdcc2; color:#2f6b3a; }
+  .lock-step.current{ border-color:var(--gold); color:#7a5a1d; font-weight:600; }
+  .lock-email{ font-size:13.5px; color:var(--ink); margin:0 0 14px; overflow-wrap:anywhere; }
+  .lock-msg{ font-size:13.5px; line-height:1.6; color:var(--danger); background:var(--danger-bg); border:1px solid #e7c9c4; border-radius:8px; padding:12px 14px; margin:0; display:none; }
+  .lock-msg.show{ display:block; }
+  .lock-form.hidden{ display:none; }
+  .lock-error.info{ color:#2f6b3a; }
+  .lock-links{ font-size:12.5px; color:var(--muted); margin:14px 0 0; }
+  .lock-card .link-btn{
+    width:auto; padding:0; background:none; color:var(--muted);
+    font-size:12.5px; font-weight:400; text-decoration:underline;
+  }
+  .lock-card .link-btn:hover{ background:none; color:var(--ink); }
+  .lock-card .link-btn:disabled{ text-decoration:none; }
+  .lock-card button:disabled{ opacity:.6; cursor:default; }
   .lock-foot{ font-size:12px; color:var(--muted); margin-top:22px; }
   .lock-copyright{ font-size:11px; color:#a39d92; margin-top:10px; }
-  /* Mientras se verifica Cloudflare Access no se muestra la tarjeta de clave */
+  /* Mientras se consulta el estado de la sesión no se muestra la tarjeta de ingreso */
   body.checking .lock-card{ visibility:hidden; }
 
   /* ---------- Portal ---------- */
@@ -229,147 +247,140 @@
   }
   .doc-open{ font-size:13px; color:#7a5a1d; font-weight:600; }
 
-  /* ---------- Importación de archivos ---------- */
-  .btn-import{
-    margin-left:auto;
-    background:transparent;
-    border:1.5px dashed var(--gold);
-    color:var(--gold);
-    padding:5px 13px;
-    border-radius:20px;
-    font-family:'Lora',serif;
-    font-size:12px;
-    font-weight:600;
+  /* ---------- Administración ---------- */
+  .doc-row:focus-visible{ outline:2px solid var(--gold); outline-offset:-2px; }
+  .tag-new{
+    font-size:10.5px; font-weight:600; letter-spacing:.3px;
+    background:#e8f3ea; color:#2f6b3a; border:1px solid #bcdcc2;
+    padding:1px 7px; border-radius:20px; margin-left:8px; vertical-align:2px;
+  }
+  .doc-empty{ padding:16px 22px; font-size:13px; color:var(--muted); font-style:italic; margin:0; }
+  .admin-bar{
+    background:#fff8ec; border:1px solid #ecd9b4; border-radius:12px;
+    padding:16px 18px; margin:0 0 30px;
+  }
+  .admin-bar p{ margin:0 0 12px; font-size:13px; color:#6b5626; line-height:1.55; }
+  .admin-bar p strong{ color:#4d3c14; }
+  .admin-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+  .btn-admin{
+    background:#fff; border:1px solid #d9c49a; color:#5b4517;
+    padding:8px 14px; border-radius:8px; font-family:'Lora',serif; font-size:13px; font-weight:600;
     cursor:pointer;
-    transition:background .15s,color .15s,border-style .15s;
-    white-space:nowrap;
-    flex-shrink:0;
   }
-  .btn-import:hover{ background:var(--gold); color:#fff; border-style:solid; }
+  .btn-admin:hover{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .btn-admin.primary{ background:var(--ink); border-color:var(--ink); color:#fff; }
+  .btn-admin.primary:hover{ background:var(--gold); border-color:var(--gold); }
+  .cat-tools, .doc-tools{ display:none; gap:4px; flex-shrink:0; }
+  body.admin-on .cat-tools, body.admin-on .doc-tools{ display:flex; }
+  .cat-tools{ margin-left:auto; flex-wrap:wrap; }
+  body.admin-on .cat-title{ flex-wrap:wrap; }
+  .tag-count{ white-space:nowrap; }
+  .tool-btn{
+    background:#fff; border:1px solid var(--border); color:var(--muted);
+    min-width:30px; height:30px; padding:0 8px; border-radius:7px;
+    font-family:'Lora',serif; font-size:13px; cursor:pointer; line-height:1;
+  }
+  .tool-btn:hover:not(:disabled){ border-color:var(--gold); color:#7a5a1d; }
+  .tool-btn.danger:hover:not(:disabled){ border-color:var(--danger); color:var(--danger); }
+  .tool-btn:disabled{ opacity:.35; cursor:default; }
+  .tool-btn.text{ font-weight:600; color:#7a5a1d; }
+  body.admin-on .doc-row{ flex-wrap:wrap; }
+  body.admin-on .doc-open{ display:none; }
 
-  .tag-local{
-    font-size:10.5px;
-    font-family:'Lora',serif;
-    font-weight:600;
-    background:#dbeafe;
-    color:#1e4da1;
-    padding:2px 8px;
-    border-radius:20px;
+  /* ---------- Ventanas (modales) ---------- */
+  .modal{
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,0.55); align-items:flex-start; justify-content:center;
+    padding:40px 16px; overflow:auto;
   }
-  .doc-del{
-    background:none;
-    border:none;
-    color:var(--muted);
-    font-size:15px;
-    cursor:pointer;
-    padding:2px 5px;
-    line-height:1;
-    opacity:.45;
-    transition:opacity .12s,color .12s;
-    flex-shrink:0;
+  .modal.open{ display:flex; }
+  .modal-card{
+    background:var(--paper-card); border-radius:14px; padding:28px 30px;
+    max-width:520px; width:100%; box-shadow:0 18px 50px rgba(0,0,0,0.3);
   }
-  .doc-del:hover{ color:var(--danger); opacity:1; }
-
-  .sort-notice{
-    font-size:11.5px;
-    color:var(--muted);
-    margin:0 0 8px;
-    text-align:right;
-    font-style:italic;
+  .modal-card.wide{ max-width:760px; }
+  .modal-card h3{
+    font-family:'Cormorant Garamond',Georgia,serif; font-size:23px; margin:0 0 4px; color:var(--ink);
   }
-
-  /* ---------- Modal de importación ---------- */
-  #importModal{
-    display:none;
-    position:fixed;
-    inset:0;
-    z-index:200;
-    background:rgba(0,0,0,0.55);
-    align-items:center;
-    justify-content:center;
-    padding:24px;
+  .modal-sub{ font-size:13px; color:var(--muted); margin:0 0 20px; line-height:1.5; }
+  .form-field{ margin-bottom:14px; }
+  .form-field label{
+    display:block; font-size:12px; font-weight:600; color:var(--muted);
+    letter-spacing:0.35px; margin-bottom:5px; text-transform:uppercase;
   }
-  #importModal.open{ display:flex; }
-  .import-card{
-    background:var(--paper-card);
-    border-radius:14px;
-    padding:32px 36px;
-    max-width:480px;
-    width:100%;
-    box-shadow:0 18px 50px rgba(0,0,0,0.3);
+  .form-field input, .form-field select, .form-field textarea{
+    width:100%; padding:10px 12px; font-family:'Lora',serif; font-size:14px;
+    border:1px solid var(--border); border-radius:8px; outline:none;
+    background:var(--paper); color:var(--text);
   }
-  .import-card h3{
-    font-family:'Cormorant Garamond',Georgia,serif;
-    font-size:22px;
-    margin:0 0 4px;
-    color:var(--ink);
-  }
-  .import-cat-label{
-    font-size:13px;
-    color:var(--muted);
-    margin:0 0 22px;
-    font-style:italic;
-  }
-  .import-field{ margin-bottom:14px; }
-  .import-field label{
-    display:block;
-    font-size:12px;
-    font-weight:600;
-    color:var(--muted);
-    letter-spacing:0.35px;
-    margin-bottom:5px;
-    text-transform:uppercase;
-  }
-  .import-field input{
-    width:100%;
-    padding:10px 12px;
-    font-family:'Lora',serif;
-    font-size:14px;
-    border:1px solid var(--border);
-    border-radius:8px;
-    outline:none;
-    background:var(--paper);
-    color:var(--text);
-  }
-  .import-field input:focus{ border-color:var(--gold); }
-  .import-file-name{
-    font-size:13px;
-    color:var(--muted);
-    padding:8px 0 0;
-    word-break:break-all;
-    min-height:24px;
-  }
-  .import-actions{
-    display:flex;
-    gap:10px;
-    margin-top:24px;
-  }
+  .form-field textarea{ min-height:220px; resize:vertical; line-height:1.5; }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus{ border-color:var(--gold); }
+  .form-hint{ font-size:12px; color:var(--muted); margin:5px 0 0; }
+  .modal-error{ color:var(--danger); font-size:13px; margin:4px 0 0; min-height:18px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:22px; }
   .btn-primary{
-    flex:1;
-    padding:11px 0;
-    background:var(--ink);
-    color:#fff;
-    border:none;
-    border-radius:8px;
-    font-family:'Lora',serif;
-    font-size:14.5px;
-    font-weight:600;
-    cursor:pointer;
-    transition:background .15s;
+    flex:1; padding:11px 0; background:var(--ink); color:#fff; border:none; border-radius:8px;
+    font-family:'Lora',serif; font-size:14.5px; font-weight:600; cursor:pointer; transition:background .15s;
   }
   .btn-primary:hover{ background:var(--gold); color:var(--ink); }
   .btn-primary:disabled{ opacity:.45; cursor:default; }
   .btn-secondary{
-    padding:11px 20px;
-    background:transparent;
-    color:var(--muted);
-    border:1px solid var(--border);
-    border-radius:8px;
-    font-family:'Lora',serif;
-    font-size:14.5px;
-    cursor:pointer;
+    padding:11px 20px; background:transparent; color:var(--muted); border:1px solid var(--border);
+    border-radius:8px; font-family:'Lora',serif; font-size:14.5px; cursor:pointer;
   }
   .btn-secondary:hover{ border-color:var(--muted); }
+
+  /* Subida de documentos */
+  .drop-zone{
+    border:2px dashed #d9c49a; border-radius:12px; background:#fffdf8;
+    padding:26px 16px; text-align:center; color:#6b5626; font-size:14px; cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .drop-zone strong{ display:block; font-size:16px; margin-bottom:4px; color:#4d3c14; }
+  .drop-zone.over{ background:#fff3dc; border-color:var(--gold); }
+  .drop-zone small{ display:block; margin-top:6px; color:var(--muted); font-size:12px; }
+  .up-list{ margin-top:16px; display:flex; flex-direction:column; gap:12px; }
+  .up-item{ border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:#fff; }
+  .up-item.done{ border-color:#bcdcc2; background:#f6fbf7; }
+  .up-item.error{ border-color:#e7c9c4; background:var(--danger-bg); }
+  .up-head{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted); margin-bottom:8px; }
+  .up-head .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .up-grid{ display:grid; grid-template-columns:2fr 1fr 1.4fr; gap:8px; }
+  .up-grid input, .up-grid select{
+    width:100%; padding:8px 10px; font-family:'Lora',serif; font-size:13.5px;
+    border:1px solid var(--border); border-radius:7px; background:var(--paper); color:var(--text); outline:none;
+  }
+  .up-grid input:focus, .up-grid select:focus{ border-color:var(--gold); }
+  .up-grid .full{ grid-column:1 / -1; }
+  .up-status{ font-size:12.5px; margin-top:8px; }
+  .up-item.error .up-status{ color:var(--danger); }
+  .up-item.done .up-status{ color:#2f6b3a; }
+  .up-bar{ height:5px; background:#eee6d6; border-radius:4px; overflow:hidden; margin-top:8px; display:none; }
+  .up-bar span{ display:block; height:100%; width:0; background:var(--gold); transition:width .2s; }
+  .up-item.sending .up-bar{ display:block; }
+
+  .log-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .log-table th{ text-align:left; color:var(--muted); font-weight:600; border-bottom:1px solid var(--border); padding:6px 8px; }
+  .log-table td{ border-bottom:1px solid #f0ebe0; padding:7px 8px; }
+  .log-wrap{ max-height:420px; overflow:auto; }
+
+  #toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#fff; padding:12px 18px; border-radius:10px; font-size:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25); opacity:0; pointer-events:none; z-index:300;
+    transition:opacity .2s, transform .2s; max-width:calc(100% - 32px);
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.error{ background:var(--danger); }
+
+  @media (max-width:560px){
+    header.top{ flex-wrap:wrap; padding:12px 16px; gap:10px; }
+    header.top .brand-name{ font-size:16px; }
+    header.top .btn-ghost{ padding:7px 11px; font-size:12px; }
+    body.admin-on .cat-tools{ margin-left:0; width:100%; }
+    .up-grid{ grid-template-columns:1fr; }
+    .modal-card{ padding:22px 18px; }
+  }
 
   .jefes-grid{
     display:grid;
@@ -405,16 +416,6 @@
     text-align:justify;
   }
   .legal-notice p:last-child{ margin-bottom:0; font-size:12px; color:var(--muted); text-align:left; }
-
-  .admin-note{
-    margin-top:24px;
-    border-top:1px dashed var(--border);
-    padding-top:16px;
-    font-size:12px;
-    color:#8f887c;
-    line-height:1.6;
-  }
-  .admin-note strong{ color:#6f6559; }
 
   /* ---------- Modal visor PDF.js ---------- */
   #viewerOverlay{
@@ -514,10 +515,32 @@
       <div class="logo-circle"><img src="docs/logo.png" alt="Logo CLAS Agregado La Querencia"></div>
       <h1>CLAS Agregado La Querencia</h1>
       <p class="sub">Portal de Documentos de Gestión<br>Acceso solo para personal institucional</p>
-      <input type="password" id="pwInput" placeholder="Clave de acceso" autocomplete="off">
-      <button id="pwSubmit">Ingresar</button>
-      <p class="lock-error" id="pwError">Clave incorrecta. Intenta nuevamente.</p>
-      <p class="lock-foot">Si no cuentas con la clave, solicítala a Gerencia o a tu jefe de servicio.</p>
+      <div class="lock-steps" id="lockSteps" aria-hidden="true" style="display:none;">
+        <span class="lock-step" data-step="correo">1 · Correo</span>
+        <span class="lock-step" data-step="codigo">2 · Código</span>
+        <span class="lock-step" data-step="clave">3 · Clave</span>
+      </div>
+      <p class="lock-msg" id="lockMsg"></p>
+      <div id="emailForm" class="lock-form hidden">
+        <input type="email" id="emailInput" placeholder="Correo electrónico" autocomplete="email" inputmode="email">
+        <button id="emailSubmit">Enviar código</button>
+        <p class="lock-error" id="emailError"></p>
+      </div>
+      <div id="codeForm" class="lock-form hidden">
+        <p class="lock-email">Si el correo está autorizado, te llegará un código de 6 dígitos a <strong id="codeEmail"></strong>. Revisa también la carpeta de spam.</p>
+        <input type="text" id="codeInput" placeholder="000000" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+        <button id="codeSubmit">Verificar código</button>
+        <p class="lock-error" id="codeError"></p>
+        <p class="lock-links"><button type="button" class="link-btn" id="codeResend">Reenviar código</button> · <button type="button" class="link-btn" id="codeChange">Cambiar correo</button></p>
+      </div>
+      <div id="pwForm" class="lock-form hidden">
+        <p class="lock-email">Correo verificado: <strong id="lockEmail"></strong></p>
+        <input type="password" id="pwInput" placeholder="Clave de acceso" autocomplete="current-password">
+        <button id="pwSubmit">Ingresar</button>
+        <p class="lock-error" id="pwError"></p>
+        <p class="lock-links"><button type="button" class="link-btn" id="pwChange">Usar otro correo</button></p>
+      </div>
+      <p class="lock-foot">Si no cuentas con acceso, solicítalo al Área de Administración.</p>
       <p class="lock-copyright">© <span id="yearLock"></span> CLAS Agregado La Querencia. Todos los derechos reservados.<br>Elaborado por Lic. Adm. Ricardo A. Agüero Angulo.</p>
     </div>
   </div>
@@ -532,6 +555,7 @@
       </div>
       <div class="spacer"></div>
       <span class="user-email" id="userEmail"></span>
+      <button class="btn-ghost" id="adminBtn" hidden>Administrar</button>
       <button class="btn-ghost" id="lockBtn">Cerrar sesión</button>
     </header>
 
@@ -547,6 +571,16 @@
       <p class="view-only-note">Haz clic sobre un documento para abrirlo en el visor. Usa las flechas para pasar de página y "Cerrar" para volver al listado.</p>
 
       <hr class="rule">
+
+      <div class="admin-bar" id="adminBar" hidden>
+        <p><strong>Modo administración.</strong> Los cambios se publican al instante para todo el personal. Usa ✎ para editar, ↑ ↓ para ordenar y 🗑 para quitar.</p>
+        <div class="admin-actions">
+          <button class="btn-admin primary" id="adminUpload" type="button">⬆ Subir documentos</button>
+          <button class="btn-admin" id="adminNewCat" type="button">+ Nueva sección</button>
+          <button class="btn-admin" id="adminJefes" type="button">Editar jefes de servicio</button>
+          <button class="btn-admin" id="adminLogs" type="button">Registro de ingresos</button>
+        </div>
+      </div>
 
       <div id="categorias"></div>
 
@@ -572,48 +606,44 @@
         </p>
       </div>
 
-      <div class="admin-note" id="adminNote" style="display:none;">
-        <strong>Nota para administración:</strong> este portal ya no depende de Google Drive — cada documento
-        se sirve como archivo propio (carpeta <code>docs/</code>) y se renderiza con un visor interno (PDF.js)
-        que no expone ningún botón de descarga ni impresión, porque el visor es código propio del portal, no el
-        de un tercero. Cada página se muestra con una marca de agua institucional superpuesta, para identificar
-        el origen de cualquier captura de pantalla no autorizada. Para agregar un documento nuevo: sube el PDF a
-        la carpeta <code>docs/</code> del repositorio y añade su entrada en la lista <code>DATA.categorias</code>
-        dentro de este archivo.
-      </div>
     </main>
   </div>
 
-  <!-- ============ VISOR MODAL ============ -->
-  <!-- Modal de importación local de archivos -->
-<div id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
-  <div class="import-card">
-    <h3 id="importModalTitle">Importar documento</h3>
-    <p class="import-cat-label" id="importCatLabel"></p>
-    <input type="file" id="importFileInput" accept=".pdf" style="display:none" aria-hidden="true">
-    <div class="import-field">
-      <label>Archivo seleccionado</label>
-      <div class="import-file-name" id="importFileName">Ningún archivo seleccionado</div>
-    </div>
-    <div class="import-field">
-      <label for="importTitulo">Título del documento</label>
-      <input type="text" id="importTitulo" placeholder="Ej: Plan Operativo 2026" maxlength="120">
-    </div>
-    <div class="import-field">
-      <label for="importDesc">Descripción <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
-      <input type="text" id="importDesc" placeholder="Breve descripción del contenido" maxlength="200">
-    </div>
-    <div class="import-field">
-      <label for="importPeriodo">Período</label>
-      <input type="text" id="importPeriodo" placeholder="Ej: 2026" maxlength="20">
-    </div>
-    <div class="import-actions">
-      <button class="btn-secondary" id="importCancel" type="button">Cancelar</button>
-      <button class="btn-primary" id="importSave" type="button" disabled>Guardar</button>
+  <!-- ============ VENTANAS DE ADMINISTRACIÓN ============ -->
+  <div class="modal" id="formModal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <div class="modal-card" id="formCard">
+      <h3 id="formTitle"></h3>
+      <p class="modal-sub" id="formSub"></p>
+      <div id="formBody"></div>
+      <p class="modal-error" id="formError"></p>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="formCancel" type="button">Cancelar</button>
+        <button class="btn-primary" id="formSubmit" type="button">Guardar</button>
+      </div>
     </div>
   </div>
-</div>
 
+  <div class="modal" id="uploadModal" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+    <div class="modal-card wide">
+      <h3 id="uploadTitle">Subir documentos</h3>
+      <p class="modal-sub">Arrastra uno o varios PDF (máximo 25 MB cada uno). Revisa el título, el período y la sección de cada archivo y pulsa <strong>Publicar</strong>: quedarán visibles de inmediato para todo el personal.</p>
+      <div class="drop-zone" id="dropZone" tabindex="0" role="button">
+        <strong>Arrastra aquí los PDF</strong>
+        o haz clic para elegirlos
+        <small>Se pueden subir varios a la vez</small>
+      </div>
+      <input type="file" id="uploadInput" accept="application/pdf,.pdf" multiple hidden>
+      <div class="up-list" id="uploadList"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="uploadCancel" type="button">Cerrar</button>
+        <button class="btn-primary" id="uploadStart" type="button" disabled>Publicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- ============ VISOR ============ -->
 <div id="viewerOverlay">
     <div class="viewer-bar">
       <div class="vtitle" id="viewerTitle">Documento</div>
@@ -640,70 +670,27 @@
 (function(){
   "use strict";
 
-  var PASSWORD = "Querencia2026";
-  var SESSION_KEY = "claq_unlocked";
-
-  // URL del Cloudflare Worker (dejar vacío si no está configurado aún)
-  var WORKER_URL = "";
-
-  // El botón "+ Importar" solo se muestra abriendo el portal con ?admin en la URL
-  var ADMIN_MODE = /[?&]admin(=|&|$)/.test(location.search);
-
-  // Correo verificado por Cloudflare Access; null cuando el portal no está detrás de Access (modo clave)
+  // Correo del usuario con sesión abierta (correo + código + clave validados en el servidor)
   var accessEmail = null;
 
   if (window['pdfjsLib']) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 
-  var DATA = {
-    categorias: [
-      {
-        nombre: "Administrativo",
-        docs: [
-          { titulo:"Plan de Mantenimiento Preventivo y Correctivo", descripcion:"Equipos informáticos y biomédicos del CLAS.", periodo:"2026", file:"docs/plan-mantenimiento-2026.pdf" },
-          { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf" },
-          { titulo:"Informe de Situación Institucional", descripcion:"Informe de situación institucional del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/informe-situacion-institucional-2025.pdf" }
-        ]
-      },
-      {
-        nombre: "Intervención Sanitaria / Epidemiológico / Brechas",
-        docs: [
-          { titulo:"ASIS — Análisis de Situación de Salud", descripcion:"Análisis de Situación de Salud del CLAS Agregado La Querencia.", periodo:"2026", file:"docs/asis-2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — CLAS Agregado (I Semestre)", descripcion:"Reporte de producción de servicios del CLAS Agregado, I Semestre acumulado.", periodo:"I Sem. 2026", file:"docs/morbilidad-clas-agregado-i-sem-2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — C.S. La Querencia (I Semestre)", descripcion:"Reporte de producción de servicios del establecimiento sede, I Semestre acumulado.", periodo:"I Sem. 2026", file:"docs/morbilidad-cs-querencia-i-sem-2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — C.S. La Querencia (Julio)", descripcion:"Reporte mensual de producción de servicios del establecimiento sede.", periodo:"Julio 2026", file:"docs/morbilidad-cs-querencia-julio-2026.pdf" }
-        ]
-      },
-      {
-        nombre: "Programación del Rol (RR.HH.)",
-        docs: [
-          { titulo:"Rol del Personal — Agosto 2026", descripcion:"Programación mensual de turnos del personal.", periodo:"Agosto 2026", file:"docs/rol-personal-agosto-2026.pdf" }
-        ]
-      }
-    ],
-    jefes: [
-      { servicio:"Enfermería", nombre:"Lic. Enf. Veronika G. Salvador Rojas" },
-      { servicio:"Obstetricia", nombre:"Obst. Verónica M. Fabian Canales" },
-      { servicio:"Odontología", nombre:"C.D. Pedro Rojas Sovero" },
-      { servicio:"Laboratorio", nombre:"Lic. Guisela E. Cantú Lagos" },
-      { servicio:"Psicología", nombre:"Lic. Ps. Sofia Balcazar Saenz" },
-      { servicio:"Gerencia", nombre:"M.C. Sindy Aguirre Cueva" },
-      { servicio:"Nutrición", nombre:"Lic. Nut. Jackeline R. Carrillo Espinoza" },
-      { servicio:"Servicio Social", nombre:"Lic. Mabella J. Tafur Andrade" },
-      { servicio:"Farmacia", nombre:"Tec. Farm. Evelyn M. Calcina Cruz" },
-      { servicio:"Transporte", nombre:"Pil. Javier Lopez Guevara" },
-      { servicio:"Administración", nombre:"Lic. Adm. Ricardo A. Agüero Angulo" },
-      { servicio:"RR.HH.", nombre:"Tec. Adm. Carmen R. Chavarria Bonifacio" },
-      { servicio:"Estadística", nombre:"Tec. Adm. Lisbet Villanueva Alegría" }
-    ]
-  };
-
   var lockScreen = document.getElementById("lockScreen");
   var portal = document.getElementById("portal");
   var pwInput = document.getElementById("pwInput");
   var pwSubmit = document.getElementById("pwSubmit");
   var pwError = document.getElementById("pwError");
+  var lockMsg = document.getElementById("lockMsg");
+  var lockEmail = document.getElementById("lockEmail");
+  var emailInput = document.getElementById("emailInput");
+  var emailSubmit = document.getElementById("emailSubmit");
+  var emailError = document.getElementById("emailError");
+  var codeInput = document.getElementById("codeInput");
+  var codeSubmit = document.getElementById("codeSubmit");
+  var codeError = document.getElementById("codeError");
+  var codeResend = document.getElementById("codeResend");
   var lockBtn = document.getElementById("lockBtn");
   var overlay = document.getElementById("viewerOverlay");
   var viewerTitle = document.getElementById("viewerTitle");
@@ -722,382 +709,818 @@
   function showPortal(){
     lockScreen.style.display = "none";
     portal.style.display = "block";
-    renderCategorias();
-    renderJefes();
+    document.getElementById("categorias").textContent = "Cargando documentos…";
+    loadCatalog();
   }
   function showLock(){
     portal.style.display = "none";
     lockScreen.style.display = "flex";
+  }
+
+  /* ---- Ingreso: 1) correo  2) código enviado al correo  3) clave — todo validado en el servidor ---- */
+  var LOCK_FORMS = ["emailForm", "codeForm", "pwForm"];
+  var STEPS = ["correo", "codigo", "clave"];
+  var pendingEmail = "";   // correo al que se envió el último código
+  var resendTimer = null;
+
+  var ERRORS = {
+    config: "El portal aún no está configurado. Comunícate con el Área de Administración.",
+    correo: "Escribe un correo electrónico válido.",
+    limite: "Demasiados intentos. Espera unos minutos e intenta nuevamente.",
+    espera: "Ya se envió un código hace menos de un minuto. Revisa tu correo o espera para reenviarlo.",
+    envio: "No se pudo enviar el código. Intenta nuevamente en unos minutos.",
+    expirado: "El código venció o no es válido. Solicita uno nuevo con \"Reenviar código\".",
+    intentos: "Se agotaron los intentos para este código. Solicita uno nuevo con \"Reenviar código\".",
+    codigo: "Código incorrecto.",
+    clave: "Clave incorrecta. Intenta nuevamente.",
+    sesion: "La verificación de tu correo venció. Vuelve a ingresar tu correo.",
+    red: "No se pudo conectar con el portal. Revisa tu conexión e intenta nuevamente.",
+    admin: "Tu correo no tiene permisos de administración.",
+    conflicto: "La lista cambió desde otro equipo. Recarga e intenta de nuevo.",
+    archivo: "No se recibió ningún archivo.",
+    grande: "El archivo supera el límite de 25 MB. Comprime el PDF antes de subirlo.",
+    pdf: "El archivo no es un PDF válido.",
+    seccion: "La sección elegida ya no existe. Recarga la página.",
+    "seccion-vacia": "Toda sección debe tener nombre.",
+    formato: "Datos no válidos. Recarga la página e intenta de nuevo."
+  };
+  function errorText(res){
+    var msg = ERRORS[res && res.error] || "No se pudo completar la operación. Intenta nuevamente.";
+    if(res && res.error === "codigo" && res.restantes) msg += " Te quedan " + res.restantes + " intento(s).";
+    if(res && res.error === "envio" && res.detalle) msg += " (Detalle: " + res.detalle + ")";
+    return msg;
+  }
+
+  // Devuelve el JSON de la API, null si el sitio no tiene funciones de servidor, o {error:"red"} sin conexión
+  function api(path, body, method){
+    var opts = { credentials:"same-origin", cache:"no-store" };
+    if(body){
+      opts.method = method || "POST";
+      opts.headers = { "Content-Type":"application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(path, opts).then(function(r){
+      var type = r.headers.get("Content-Type") || "";
+      return type.indexOf("application/json") >= 0 ? r.json() : null;
+    }).catch(function(){ return { ok:false, error:"red" }; });
+  }
+
+  function busy(btn, text){
+    var original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = text;
+    return function(){ btn.disabled = false; btn.textContent = original; };
+  }
+
+  function setMessage(el, msg, info){
+    el.textContent = msg || "";
+    el.classList.toggle("show", !!msg);
+    el.classList.toggle("info", !!info);
+  }
+
+  function showStep(step, formId){
+    showLock();
+    setMessage(lockMsg, "");
+    var current = STEPS.indexOf(step);
+    var steps = document.getElementById("lockSteps");
+    steps.style.display = "";
+    Array.prototype.forEach.call(steps.children, function(el){
+      var i = STEPS.indexOf(el.getAttribute("data-step"));
+      el.classList.toggle("done", i < current);
+      el.classList.toggle("current", i === current);
+    });
+    LOCK_FORMS.forEach(function(id){ document.getElementById(id).classList.toggle("hidden", id !== formId); });
+    [emailError, codeError, pwError].forEach(function(el){ setMessage(el, ""); });
+  }
+
+  function showLockMessage(msg){
+    showLock();
+    document.getElementById("lockSteps").style.display = "none";
+    LOCK_FORMS.forEach(function(id){ document.getElementById(id).classList.add("hidden"); });
+    setMessage(lockMsg, msg);
+  }
+
+  function showEmailStep(msg){
+    showStep("correo", "emailForm");
+    if(msg) setMessage(emailError, msg);
+    emailInput.focus();
+  }
+
+  function showCodeStep(email){
+    showStep("codigo", "codeForm");
+    document.getElementById("codeEmail").textContent = email;
+    codeInput.value = "";
+    codeInput.focus();
+  }
+
+  function showPasswordStep(email){
+    showStep("clave", "pwForm");
+    lockEmail.textContent = email;
     pwInput.value = "";
-    pwError.classList.remove("show");
+    pwInput.focus();
+  }
+
+  function startResendCooldown(){
+    var left = 60;
+    clearInterval(resendTimer);
+    codeResend.disabled = true;
+    codeResend.textContent = "Reenviar código (" + left + " s)";
+    resendTimer = setInterval(function(){
+      left--;
+      if(left <= 0){
+        clearInterval(resendTimer);
+        codeResend.disabled = false;
+        codeResend.textContent = "Reenviar código";
+      } else {
+        codeResend.textContent = "Reenviar código (" + left + " s)";
+      }
+    }, 1000);
+  }
+
+  function checkSession(){
+    api("/api/session").then(function(st){
+      document.body.classList.remove("checking");
+      if(!st){
+        // Sin funciones de servidor (otro hosting o archivo abierto en local)
+        showLockMessage("Este portal solo funciona desde su dirección oficial: portal-clas-querencia.pages.dev");
+      } else if(!st.ok){
+        showLockMessage(errorText(st));
+      } else if(st.stage === "listo"){
+        accessEmail = st.email;
+        document.getElementById("userEmail").textContent = st.email;
+        showPortal();
+      } else if(st.stage === "clave"){
+        showPasswordStep(st.email);
+      } else {
+        showEmailStep();
+      }
+    });
+  }
+
+  function requestCode(email, onDone){
+    api("/api/request-code", { email: email }).then(function(res){
+      if(res && res.ok){ pendingEmail = email; startResendCooldown(); }
+      onDone(res || { ok:false });
+    });
+  }
+
+  function submitEmail(){
+    var email = emailInput.value.trim().toLowerCase();
+    if(!email || emailSubmit.disabled) return;
+    var done = busy(emailSubmit, "Enviando…");
+    requestCode(email, function(res){
+      done();
+      if(res.ok){ showCodeStep(email); }
+      else if(res.error === "espera"){
+        // Ya hay un código reciente para este correo: se pasa a escribirlo, con el reenvío en espera
+        pendingEmail = email;
+        showCodeStep(email);
+        setMessage(codeError, errorText(res));
+        startResendCooldown();
+      }
+      else { setMessage(emailError, errorText(res)); }
+    });
+  }
+
+  function submitCode(){
+    var code = codeInput.value.replace(/\D/g, "");
+    if(code.length !== 6){ setMessage(codeError, "Escribe los 6 dígitos del código."); return; }
+    if(codeSubmit.disabled) return;
+    var done = busy(codeSubmit, "Verificando…");
+    api("/api/verify-code", { email: pendingEmail, code: code }).then(function(res){
+      done();
+      if(res && res.ok){ showPasswordStep(res.email); }
+      else { setMessage(codeError, errorText(res)); codeInput.select(); }
+    });
+  }
+
+  function resendCode(){
+    if(!pendingEmail || codeResend.disabled) return;
+    codeResend.disabled = true;
+    requestCode(pendingEmail, function(res){
+      if(res.ok){ setMessage(codeError, "Se envió un nuevo código. Usa el más reciente.", true); codeInput.value = ""; codeInput.focus(); }
+      else { codeResend.disabled = false; setMessage(codeError, errorText(res)); }
+    });
   }
 
   function tryUnlock(){
-    if(pwInput.value === PASSWORD){
-      try{ sessionStorage.setItem(SESSION_KEY, "1"); }catch(e){}
-      showPortal();
-    } else {
-      pwError.classList.add("show");
-    }
-  }
-  pwSubmit.addEventListener("click", tryUnlock);
-  pwInput.addEventListener("keydown", function(e){
-    if(e.key === "Enter") tryUnlock();
-    pwError.classList.remove("show");
-  });
-  lockBtn.addEventListener("click", function(){
-    if(accessEmail){ location.href = "/cdn-cgi/access/logout"; return; }
-    try{ sessionStorage.removeItem(SESSION_KEY); }catch(e){}
-    showLock();
-  });
-
-  /* ---- Cloudflare Access: si el portal está protegido, se usa el correo verificado ---- */
-  function checkAccessIdentity(cb){
-    var done = false;
-    function finish(email){ if(done) return; done = true; cb(email); }
-    setTimeout(function(){ finish(null); }, 4000);
-    try{
-      fetch("/cdn-cgi/access/get-identity", { credentials:"same-origin", cache:"no-store" })
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(id){ finish(id && id.email ? String(id.email) : null); })
-        .catch(function(){ finish(null); });
-    }catch(e){ finish(null); }
-  }
-
-  /* ---- IndexedDB para importaciones locales ---- */
-  var importDB = null;
-  var importPendingCat = null;
-  var importPendingFile = null;
-
-  function initImportDB(cb){
-    try{
-      var req = indexedDB.open("claqImports", 1);
-      req.onupgradeneeded = function(e){
-        var s = e.target.result.createObjectStore("docs",{keyPath:"id",autoIncrement:true});
-        s.createIndex("catNombre","catNombre",{unique:false});
-      };
-      req.onsuccess = function(e){ importDB = e.target.result; cb(); };
-      req.onerror = function(){ cb(); };
-    }catch(e){ cb(); }
-  }
-
-  function saveImportDoc(catNombre, titulo, desc, periodo, buf, cb){
-    if(!importDB){ cb(null); return; }
-    var tx = importDB.transaction("docs","readwrite");
-    var req = tx.objectStore("docs").add({
-      catNombre:catNombre, titulo:titulo, descripcion:desc,
-      periodo:periodo, data:buf, addedAt:Date.now()
+    if(!pwInput.value || pwSubmit.disabled) return;
+    var done = busy(pwSubmit, "Verificando…");
+    api("/api/login", { clave: pwInput.value }).then(function(res){
+      done();
+      if(res && res.ok){ pwInput.value = ""; checkSession(); }
+      else if(res && res.error === "sesion"){ showEmailStep(errorText(res)); }
+      else { setMessage(pwError, errorText(res)); pwInput.select(); }
     });
-    req.onsuccess = function(e){ cb(e.target.result); };
-    req.onerror = function(){ cb(null); };
   }
 
-  function loadImportDocs(catNombre, cb){
-    if(!importDB){ cb([]); return; }
-    var tx = importDB.transaction("docs","readonly");
-    var req = tx.objectStore("docs").index("catNombre").getAll(catNombre);
-    req.onsuccess = function(e){ cb(e.target.result||[]); };
-    req.onerror = function(){ cb([]); };
+  // Vuelve al paso del correo descartando un ingreso a medias
+  function restartLogin(){
+    api("/api/logout", {}).then(function(){
+      pendingEmail = "";
+      clearInterval(resendTimer);
+      showEmailStep();
+    });
   }
 
-  function deleteImportDoc(id, cb){
-    if(!importDB){ cb(); return; }
-    var tx = importDB.transaction("docs","readwrite");
-    var req = tx.objectStore("docs").delete(id);
-    req.onsuccess = cb;
-    req.onerror = cb;
+  emailSubmit.addEventListener("click", submitEmail);
+  codeSubmit.addEventListener("click", submitCode);
+  pwSubmit.addEventListener("click", tryUnlock);
+  codeResend.addEventListener("click", resendCode);
+  document.getElementById("codeChange").addEventListener("click", restartLogin);
+  document.getElementById("pwChange").addEventListener("click", restartLogin);
+  emailInput.addEventListener("keydown", function(e){ if(e.key === "Enter") submitEmail(); });
+  codeInput.addEventListener("keydown", function(e){ if(e.key === "Enter") submitCode(); });
+  pwInput.addEventListener("keydown", function(e){ if(e.key === "Enter") tryUnlock(); });
+  lockBtn.addEventListener("click", function(){
+    api("/api/logout", {}).then(function(){
+      accessEmail = null;
+      pendingEmail = "";
+      document.getElementById("userEmail").textContent = "";
+      emailInput.value = "";
+      checkSession();
+    });
+  });
+
+  /* ---- Catálogo de documentos (se guarda en el servidor) ---- */
+  var catalog = null;     // { rev, categorias:[{id, nombre, docs:[…]}], jefes:[…] }
+  var isAdmin = false;    // el servidor indica si el correo está en ADMIN_EMAILS
+  var adminOn = false;    // modo administración activado en pantalla
+  var NEW_DAYS = 15;      // días que un documento subido se marca como "Nuevo"
+  var MAX_MB = 25;
+
+  var adminBtn = document.getElementById("adminBtn");
+  var adminBar = document.getElementById("adminBar");
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+
+  function toast(msg, isError){
+    toastEl.textContent = msg;
+    toastEl.classList.toggle("error", !!isError);
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, isError ? 6000 : 3500);
   }
 
-  /* ---- Documentos en la nube (Cloudflare Worker + R2) ---- */
-  var cloudDocs = [];
-
-  function initCloudDocs(cb){
-    if(!WORKER_URL){ cb(); return; }
-    fetch(WORKER_URL + "/api/docs")
-      .then(function(r){ return r.json(); })
-      .then(function(docs){ cloudDocs = docs || []; cb(); })
-      .catch(function(){ cb(); });
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
   }
 
-  function saveCloudDoc(catNombre, titulo, periodo, file, cb){
-    if(!WORKER_URL){ cb(null); return; }
-    var form = new FormData();
-    form.append("file", file);
-    form.append("catNombre", catNombre);
-    form.append("titulo", titulo);
-    form.append("periodo", periodo);
-    fetch(WORKER_URL + "/api/upload", {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + PASSWORD },
-      body: form
-    })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(meta){
-        if(meta){ cloudDocs.push(meta); }
-        cb(meta);
-      })
-      .catch(function(){ cb(null); });
+  function toolBtn(label, title, onClick, opts){
+    var b = el("button", "tool-btn" + (opts && opts.cls ? " " + opts.cls : ""), label);
+    b.type = "button";
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    if(opts && opts.disabled) b.disabled = true;
+    b.addEventListener("click", function(e){ e.stopPropagation(); onClick(); });
+    return b;
   }
 
-  function deleteCloudDoc(id, cb){
-    if(!WORKER_URL){ cb(); return; }
-    fetch(WORKER_URL + "/api/docs/" + id, {
-      method: "DELETE",
-      headers: { "Authorization": "Bearer " + PASSWORD }
-    }).then(function(){ cb(); }).catch(function(){ cb(); });
+  // "octubre de 2026" → "Octubre 2026"
+  function currentPeriod(){
+    var s = new Date().toLocaleDateString("es-PE", { month:"long", year:"numeric" }).replace(" de ", " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
+
+  // Período a partir del nombre del archivo: "rol_setiembre-2026.pdf" → "Setiembre 2026",
+  // "informe-ii-sem-2026.pdf" → "II Sem. 2026", "plan-2027.pdf" → "2027"; si no hay datos, el mes actual
+  var MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","setiembre","octubre","noviembre","diciembre"];
+  function periodFromName(name){
+    var n = name.toLowerCase().replace(/septiembre/g, "setiembre").replace(/[-_.]+/g, " ")
+      .replace(/([a-zñ])(\d)/g, "$1 $2").replace(/(\d)([a-zñ])/g, "$1 $2");
+    var year = (n.match(/\b(20\d{2})\b/) || [])[1];
+    var mes = MESES.filter(function(m){ return new RegExp("\\b" + m + "\\b").test(n); })[0];
+    var sem = (n.match(/\b(i{1,2})\s*sem/) || [])[1];
+    if(mes && year) return mes.charAt(0).toUpperCase() + mes.slice(1) + " " + year;
+    if(sem && year) return sem.toUpperCase() + " Sem. " + year;
+    if(year) return year;
+    return currentPeriod();
+  }
+
+  // "rol-personal_setiembre-2026.pdf" → "Rol personal setiembre 2026"
+  function titleFromFile(name){
+    var t = name.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function formatSize(bytes){
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(bytes / 1024)) + " KB";
+  }
+
+  function isNew(doc){
+    return doc.addedAt && (Date.now() - doc.addedAt) < NEW_DAYS * 86400000;
+  }
+
+  function loadCatalog(){
+    return api("/api/catalog").then(function(res){
+      if(res && res.ok){
+        catalog = res.catalog;
+        isAdmin = !!res.admin;
+        if(!isAdmin) adminOn = false;
+        renderAll();
+      } else if(res && res.error === "sesion"){
+        accessEmail = null;
+        checkSession();
+      } else {
+        document.getElementById("categorias").textContent = "No se pudo cargar la lista de documentos. Recarga la página.";
+      }
+    });
+  }
+
+  function renderAll(){
+    adminBtn.hidden = !isAdmin;
+    adminBtn.textContent = adminOn ? "Terminar edición" : "Administrar";
+    adminBar.hidden = !adminOn;
+    document.body.classList.toggle("admin-on", adminOn);
+    renderCategorias();
+    renderJefes();
+  }
+
+  adminBtn.addEventListener("click", function(){
+    adminOn = !adminOn;
+    renderAll();
+    if(adminOn) window.scrollTo({ top: adminBar.getBoundingClientRect().top + window.scrollY - 90, behavior:"smooth" });
+  });
 
   function renderCategorias(){
-    var cloudByCat = {};
-    cloudDocs.forEach(function(d){
-      if(!cloudByCat[d.catNombre]) cloudByCat[d.catNombre] = [];
-      cloudByCat[d.catNombre].push(d);
-    });
-    if(!importDB){ renderCategoriasSync({}, cloudByCat); return; }
-    var pending = DATA.categorias.length;
-    if(pending === 0){ renderCategoriasSync({}, cloudByCat); return; }
-    var importedByCat = {};
-    DATA.categorias.forEach(function(cat){
-      loadImportDocs(cat.nombre, function(docs){
-        importedByCat[cat.nombre] = docs;
-        pending--;
-        if(pending === 0){ renderCategoriasSync(importedByCat, cloudByCat); }
-      });
-    });
-  }
-
-  function renderCategoriasSync(importedByCat, cloudByCat){
     var root = document.getElementById("categorias");
     root.innerHTML = "";
-    DATA.categorias.forEach(function(cat){
-      var imported = (importedByCat[cat.nombre]||[]).map(function(imp){
-        return { titulo:imp.titulo, descripcion:imp.descripcion||"",
-                 periodo:imp.periodo||"", _local:true, _id:imp.id, _data:imp.data };
-      });
+    if(!catalog.categorias.length){
+      root.appendChild(el("p", "doc-empty", adminOn ? "Aún no hay secciones. Crea una con “+ Nueva sección”." : "Aún no hay documentos publicados."));
+      return;
+    }
+    catalog.categorias.forEach(function(cat, ci){
+      var wrap = el("div");
+      var h = el("h2", "cat-title");
+      h.appendChild(document.createTextNode(cat.nombre + " "));
+      h.appendChild(el("span", "tag-count", cat.docs.length + " doc."));
 
-      var cloud = (cloudByCat[cat.nombre]||[]).map(function(d){
-        return { titulo:d.titulo, descripcion:d.descripcion||"",
-                 periodo:d.periodo||"", _cloud:true, _cloudId:d.id,
-                 file: WORKER_URL + "/api/docs/" + d.id + "/file" };
-      });
-
-      var allDocs = cat.docs.concat(cloud).concat(imported);
-
-      // Ordenar alfabéticamente cuando hay archivos adicionales
-      if(imported.length > 0 || cloud.length > 0){
-        allDocs.sort(function(a,b){
-          return (a.titulo||"").localeCompare(b.titulo||"","es",{sensitivity:"base"});
-        });
-      }
-
-      var wrap = document.createElement("div");
-
-      var h = document.createElement("h2");
-      h.className = "cat-title";
-      var nameNode = document.createTextNode(cat.nombre + " ");
-      var countBadge = document.createElement("span");
-      countBadge.className = "tag-count";
-      countBadge.textContent = allDocs.length + " doc.";
-      h.appendChild(nameNode);
-      h.appendChild(countBadge);
-      if(ADMIN_MODE){
-        var importBtn = document.createElement("button");
-        importBtn.className = "btn-import";
-        importBtn.type = "button";
-        importBtn.textContent = "+ Importar";
-        (function(cn){ importBtn.addEventListener("click", function(){ openImportModal(cn); }); })(cat.nombre);
-        h.appendChild(importBtn);
-      }
+      var tools = el("span", "cat-tools");
+      tools.appendChild(toolBtn("+ Subir aquí", "Subir documentos a esta sección", function(){ openUpload(cat.id); }, { cls:"text" }));
+      tools.appendChild(toolBtn("✎", "Renombrar sección", function(){ editCategory(cat.id); }));
+      tools.appendChild(toolBtn("↑", "Subir sección", function(){ moveCategory(ci, -1); }, { disabled: ci === 0 }));
+      tools.appendChild(toolBtn("↓", "Bajar sección", function(){ moveCategory(ci, 1); }, { disabled: ci === catalog.categorias.length - 1 }));
+      tools.appendChild(toolBtn("🗑", "Eliminar sección", function(){ deleteCategory(cat.id); }, { cls:"danger" }));
+      h.appendChild(tools);
       wrap.appendChild(h);
 
-      if(imported.length > 0 || cloud.length > 0){
-        var parts = [];
-        if(cloud.length > 0) parts.push(cloud.length + " archivo(s) en la nube");
-        if(imported.length > 0) parts.push(imported.length + " archivo(s) local(es)");
-        var notice = document.createElement("p");
-        notice.className = "sort-notice";
-        notice.textContent = "Ordenado alfabéticamente · " + parts.join(" · ");
-        wrap.appendChild(notice);
-      }
+      var card = el("div", "doc-card");
+      if(!cat.docs.length) card.appendChild(el("p", "doc-empty", "Sin documentos en esta sección."));
+      cat.docs.forEach(function(doc, di){
+        var row = el("div", "doc-row");
+        row.setAttribute("role", "button");
+        row.tabIndex = 0;
 
-      var card = document.createElement("div");
-      card.className = "doc-card";
-
-      allDocs.forEach(function(doc){
-        var row = document.createElement("button");
-        row.className = "doc-row" + (doc.pending ? " pending" : "");
-        row.type = "button";
-        row.disabled = !!doc.pending;
-
-        var docMain = document.createElement("div");
-        docMain.className = "doc-main";
-        var docTitle = document.createElement("div");
-        docTitle.className = "doc-title";
-        docTitle.textContent = doc.titulo;
-        var docDesc = document.createElement("div");
-        docDesc.className = "doc-desc";
-        docDesc.textContent = doc.descripcion;
+        var docMain = el("div", "doc-main");
+        var docTitle = el("div", "doc-title", doc.titulo);
+        if(isNew(doc)) docTitle.appendChild(el("span", "tag-new", "Nuevo"));
         docMain.appendChild(docTitle);
-        docMain.appendChild(docDesc);
+        docMain.appendChild(el("div", "doc-desc", doc.descripcion));
 
-        var docSide = document.createElement("div");
-        docSide.className = "doc-side";
-        var tagPeriod = document.createElement("span");
-        tagPeriod.className = "tag-period";
-        tagPeriod.textContent = doc.periodo;
-        docSide.appendChild(tagPeriod);
-
-        if(doc._cloud){
-          var openLblCloud = document.createElement("span");
-          openLblCloud.className = "doc-open";
-          openLblCloud.textContent = "Ver documento →";
-          docSide.appendChild(openLblCloud);
-          var delBtnCloud = document.createElement("button");
-          delBtnCloud.className = "doc-del";
-          delBtnCloud.type = "button";
-          delBtnCloud.title = "Eliminar documento de la nube";
-          delBtnCloud.textContent = "✕";
-          (function(d){ delBtnCloud.addEventListener("click", function(e){
-            e.stopPropagation();
-            if(confirm("¿Eliminar \"" + d.titulo + "\" del servidor?")){
-              deleteCloudDoc(d._cloudId, function(){
-                cloudDocs = cloudDocs.filter(function(x){ return x.id !== d._cloudId; });
-                renderCategorias();
-              });
-            }
-          }); })(doc);
-          docSide.appendChild(delBtnCloud);
-          (function(d){ row.addEventListener("click", function(){ openViewer(d); }); })(doc);
-        } else if(doc._local){
-          var tagLocal = document.createElement("span");
-          tagLocal.className = "tag-local";
-          tagLocal.textContent = "local";
-          docSide.appendChild(tagLocal);
-          var openLbl = document.createElement("span");
-          openLbl.className = "doc-open";
-          openLbl.textContent = "Ver documento →";
-          docSide.appendChild(openLbl);
-          var delBtn = document.createElement("button");
-          delBtn.className = "doc-del";
-          delBtn.type = "button";
-          delBtn.title = "Eliminar importación local";
-          delBtn.textContent = "✕";
-          (function(d){ delBtn.addEventListener("click", function(e){
-            e.stopPropagation();
-            if(confirm("¿Eliminar \"" + d.titulo + "\" de los archivos importados localmente?")){
-              deleteImportDoc(d._id, function(){ renderCategorias(); });
-            }
-          }); })(doc);
-          docSide.appendChild(delBtn);
-          (function(d){ row.addEventListener("click", function(){ openViewerLocal(d); }); })(doc);
-        } else if(doc.pending){
-          var tagPending = document.createElement("span");
-          tagPending.className = "tag-pending";
-          tagPending.textContent = "Pendiente de carga";
-          docSide.appendChild(tagPending);
-        } else {
-          var openLbl2 = document.createElement("span");
-          openLbl2.className = "doc-open";
-          openLbl2.textContent = "Ver documento →";
-          docSide.appendChild(openLbl2);
-          (function(d){ row.addEventListener("click", function(){ openViewer(d); }); })(doc);
-        }
+        var docSide = el("div", "doc-side");
+        if(doc.periodo) docSide.appendChild(el("span", "tag-period", doc.periodo));
+        docSide.appendChild(el("span", "doc-open", "Ver documento →"));
+        var dt = el("span", "doc-tools");
+        dt.appendChild(toolBtn("✎", "Editar datos del documento", function(){ editDoc(cat.id, doc.id); }));
+        dt.appendChild(toolBtn("↑", "Subir en la lista", function(){ moveDoc(ci, di, -1); }, { disabled: di === 0 }));
+        dt.appendChild(toolBtn("↓", "Bajar en la lista", function(){ moveDoc(ci, di, 1); }, { disabled: di === cat.docs.length - 1 }));
+        dt.appendChild(toolBtn("🗑", "Quitar documento", function(){ deleteDoc(cat.id, doc.id); }, { cls:"danger" }));
+        docSide.appendChild(dt);
 
         row.appendChild(docMain);
         row.appendChild(docSide);
+        row.addEventListener("click", function(){ openViewer(doc); });
+        row.addEventListener("keydown", function(e){
+          if(e.target === row && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); openViewer(doc); }
+        });
         card.appendChild(row);
       });
-
       wrap.appendChild(card);
       root.appendChild(wrap);
     });
   }
 
-  /* ---- Modal de importación ---- */
-  var importModal = document.getElementById("importModal");
-  var importFileInput = document.getElementById("importFileInput");
-  var importCatLabel = document.getElementById("importCatLabel");
-  var importFileNameEl = document.getElementById("importFileName");
-  var importTituloEl = document.getElementById("importTitulo");
-  var importDescEl = document.getElementById("importDesc");
-  var importPeriodoEl = document.getElementById("importPeriodo");
-  var importSaveBtn = document.getElementById("importSave");
-  var importCancelBtn = document.getElementById("importCancel");
-
-  function openImportModal(catNombre){
-    importPendingCat = catNombre;
-    importPendingFile = null;
-    importCatLabel.textContent = "Sección: " + catNombre;
-    importFileNameEl.textContent = "Ningún archivo seleccionado";
-    importTituloEl.value = "";
-    importDescEl.value = "";
-    importPeriodoEl.value = String(new Date().getFullYear());
-    importSaveBtn.disabled = true;
-    importModal.classList.add("open");
-    importFileInput.value = "";
-    importFileInput.click();
-  }
-
-  function closeImportModal(){
-    importModal.classList.remove("open");
-    importPendingCat = null;
-    importPendingFile = null;
-  }
-
-  importFileInput.addEventListener("change", function(){
-    var file = this.files[0];
-    if(!file) return;
-    importPendingFile = file;
-    importFileNameEl.textContent = file.name;
-    var titulo = file.name.replace(/\.pdf$/i,"").replace(/[-_]+/g," ").trim();
-    importTituloEl.value = titulo;
-    var periodo = importPeriodoEl.value.trim() || String(new Date().getFullYear());
-    importSaveBtn.disabled = true;
-    importSaveBtn.textContent = "Guardando…";
-
-    if(WORKER_URL){
-      // Subir a la nube (visible para todos)
-      saveCloudDoc(importPendingCat, titulo, periodo, file, function(meta){
-        importSaveBtn.textContent = "Guardar";
-        closeImportModal();
-        renderCategorias();
-      });
-    } else {
-      // Fallback: guardar localmente en IndexedDB
-      var reader = new FileReader();
-      reader.onload = function(e){
-        saveImportDoc(importPendingCat, titulo, "", periodo, e.target.result, function(){
-          importSaveBtn.textContent = "Guardar";
-          closeImportModal();
-          renderCategorias();
-        });
-      };
-      reader.readAsArrayBuffer(file);
-    }
-  });
-
-  importCancelBtn.addEventListener("click", closeImportModal);
-
-  importModal.addEventListener("click", function(e){
-    if(e.target === importModal){ closeImportModal(); }
-  });
-
-  /* El guardado ahora ocurre automáticamente al seleccionar el archivo */
-
   function renderJefes(){
     var grid = document.getElementById("jefesGrid");
     grid.innerHTML = "";
-    DATA.jefes.forEach(function(j){
-      var c = document.createElement("div");
-      c.className = "jefe-card";
-      c.innerHTML =
-        '<div class="jefe-servicio"></div>' +
-        '<div class="jefe-nombre"></div>';
-      c.querySelector(".jefe-servicio").textContent = j.servicio;
-      c.querySelector(".jefe-nombre").textContent = j.nombre;
+    catalog.jefes.forEach(function(j){
+      var c = el("div", "jefe-card");
+      c.appendChild(el("div", "jefe-servicio", j.servicio));
+      c.appendChild(el("div", "jefe-nombre", j.nombre));
       grid.appendChild(c);
     });
   }
+
+  /* ---- Cambios del administrador: se aplican sobre una copia y se guardan en el servidor ---- */
+  function findCat(draft, catId){
+    return draft.categorias.filter(function(c){ return c.id === catId; })[0];
+  }
+
+  function saveCatalog(mutate, okMsg){
+    var draft = JSON.parse(JSON.stringify(catalog));
+    if(mutate(draft) === false) return Promise.resolve(false);
+    var payload = {
+      rev: catalog.rev,
+      jefes: draft.jefes,
+      categorias: draft.categorias.map(function(c){
+        return { id:c.id, nombre:c.nombre, docs:c.docs.map(function(d){
+          return { id:d.id, titulo:d.titulo, descripcion:d.descripcion, periodo:d.periodo };
+        }) };
+      })
+    };
+    return api("/api/admin/catalog", payload, "PUT").then(function(res){
+      if(res && res.ok){
+        catalog = res.catalog;
+        renderAll();
+        if(okMsg) toast(okMsg);
+        return true;
+      }
+      if(res && res.error === "conflicto"){
+        toast("La lista cambió desde otro equipo. Se actualizó; repite la acción.", true);
+        loadCatalog();
+      } else if(res && res.error === "sesion"){
+        accessEmail = null;
+        checkSession();
+      } else {
+        toast(errorText(res), true);
+      }
+      return false;
+    });
+  }
+
+  function moveItem(arr, i, delta){
+    var j = i + delta;
+    if(j < 0 || j >= arr.length) return false;
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+
+  function moveCategory(ci, delta){
+    saveCatalog(function(d){ return moveItem(d.categorias, ci, delta); });
+  }
+
+  function moveDoc(ci, di, delta){
+    saveCatalog(function(d){ return moveItem(d.categorias[ci].docs, di, delta); });
+  }
+
+  function deleteDoc(catId, docId){
+    var doc = findCat(catalog, catId).docs.filter(function(x){ return x.id === docId; })[0];
+    var msg = doc.subido
+      ? "¿Eliminar «" + doc.titulo + "»?\n\nEl archivo se borrará del portal de forma permanente."
+      : "¿Quitar «" + doc.titulo + "» del portal?\n\nEl archivo original se conserva en el repositorio (carpeta docs/).";
+    if(!confirm(msg)) return;
+    saveCatalog(function(d){
+      var cat = findCat(d, catId);
+      cat.docs = cat.docs.filter(function(x){ return x.id !== docId; });
+    }, "Documento quitado.");
+  }
+
+  function deleteCategory(catId){
+    var cat = findCat(catalog, catId);
+    if(cat.docs.length){
+      alert("La sección «" + cat.nombre + "» tiene " + cat.docs.length + " documento(s). Muévelos a otra sección (con ✎) o quítalos antes de eliminarla.");
+      return;
+    }
+    if(!confirm("¿Eliminar la sección «" + cat.nombre + "»?")) return;
+    saveCatalog(function(d){
+      d.categorias = d.categorias.filter(function(c){ return c.id !== catId; });
+    }, "Sección eliminada.");
+  }
+
+  /* ---- Ventana de formulario genérica ---- */
+  var formModal = document.getElementById("formModal");
+  var formBody = document.getElementById("formBody");
+  var formError = document.getElementById("formError");
+  var formSubmit = document.getElementById("formSubmit");
+  var formOnSubmit = null;
+
+  // fields: [{ name, label, value, type:"text"|"select"|"textarea", options:[{value,label}], hint, maxlength, required }]
+  function openForm(opts){
+    document.getElementById("formTitle").textContent = opts.title;
+    document.getElementById("formSub").textContent = opts.sub || "";
+    document.getElementById("formCard").classList.toggle("wide", !!opts.wide);
+    formBody.innerHTML = "";
+    formError.textContent = "";
+    formSubmit.textContent = opts.submitLabel || "Guardar";
+    formSubmit.disabled = false;
+    formSubmit.hidden = !opts.onSubmit;
+    document.getElementById("formCancel").textContent = opts.onSubmit ? "Cancelar" : "Cerrar";
+    (opts.fields || []).forEach(function(f){
+      var wrap = el("div", "form-field");
+      var id = "f_" + f.name;
+      var label = el("label", "", f.label);
+      label.htmlFor = id;
+      wrap.appendChild(label);
+      var input;
+      if(f.type === "select"){
+        input = el("select");
+        f.options.forEach(function(o){
+          var opt = el("option", "", o.label);
+          opt.value = o.value;
+          input.appendChild(opt);
+        });
+      } else if(f.type === "textarea"){
+        input = el("textarea");
+      } else {
+        input = el("input");
+        input.type = "text";
+      }
+      input.id = id;
+      input.name = f.name;
+      input.value = f.value || "";
+      if(f.maxlength) input.maxLength = f.maxlength;
+      if(f.placeholder) input.placeholder = f.placeholder;
+      wrap.appendChild(input);
+      if(f.hint) wrap.appendChild(el("p", "form-hint", f.hint));
+      formBody.appendChild(wrap);
+    });
+    if(opts.content) formBody.appendChild(opts.content);
+    formOnSubmit = opts.onSubmit || null;
+    formModal.classList.add("open");
+    var first = formBody.querySelector("input, select, textarea");
+    if(first) first.focus();
+  }
+
+  function closeForm(){ formModal.classList.remove("open"); formOnSubmit = null; }
+
+  function formValues(){
+    var v = {};
+    Array.prototype.forEach.call(formBody.querySelectorAll("input, select, textarea"), function(i){ v[i.name] = i.value.trim(); });
+    return v;
+  }
+
+  formSubmit.addEventListener("click", function(){
+    if(!formOnSubmit || formSubmit.disabled) return;
+    var result = formOnSubmit(formValues());
+    if(typeof result === "string"){ formError.textContent = result; return; }
+    formSubmit.disabled = true;
+    Promise.resolve(result).then(function(ok){
+      formSubmit.disabled = false;
+      if(ok !== false) closeForm();
+    });
+  });
+  document.getElementById("formCancel").addEventListener("click", closeForm);
+  formModal.addEventListener("click", function(e){ if(e.target === formModal) closeForm(); });
+  formBody.addEventListener("keydown", function(e){
+    if(e.key === "Enter" && e.target.tagName === "INPUT"){ e.preventDefault(); formSubmit.click(); }
+  });
+
+  function categoryOptions(){
+    return catalog.categorias.map(function(c){ return { value:c.id, label:c.nombre }; });
+  }
+
+  function editDoc(catId, docId){
+    var doc = findCat(catalog, catId).docs.filter(function(x){ return x.id === docId; })[0];
+    openForm({
+      title: "Editar documento",
+      sub: "Los cambios se publican al instante.",
+      fields: [
+        { name:"titulo", label:"Título", value:doc.titulo, maxlength:160 },
+        { name:"descripcion", label:"Descripción (opcional)", value:doc.descripcion, maxlength:300 },
+        { name:"periodo", label:"Período", value:doc.periodo, maxlength:40, placeholder:"Ej: Setiembre 2026" },
+        { name:"seccion", label:"Sección", type:"select", options:categoryOptions(), value:catId }
+      ],
+      onSubmit: function(v){
+        if(!v.titulo) return "El título no puede quedar vacío.";
+        return saveCatalog(function(d){
+          var from = findCat(d, catId);
+          var item = from.docs.filter(function(x){ return x.id === docId; })[0];
+          item.titulo = v.titulo;
+          item.descripcion = v.descripcion;
+          item.periodo = v.periodo;
+          if(v.seccion !== catId){
+            from.docs = from.docs.filter(function(x){ return x.id !== docId; });
+            findCat(d, v.seccion).docs.unshift(item);
+          }
+        }, "Documento actualizado.");
+      }
+    });
+  }
+
+  function newCategory(){
+    openForm({
+      title: "Nueva sección",
+      fields: [{ name:"nombre", label:"Nombre de la sección", maxlength:80, placeholder:"Ej: Planes y presupuesto" }],
+      submitLabel: "Crear sección",
+      onSubmit: function(v){
+        if(!v.nombre) return "Escribe un nombre.";
+        return saveCatalog(function(d){
+          d.categorias.push({ id:"c" + Date.now().toString(36), nombre:v.nombre, docs:[] });
+        }, "Sección creada.");
+      }
+    });
+  }
+
+  function editCategory(catId){
+    var cat = findCat(catalog, catId);
+    openForm({
+      title: "Renombrar sección",
+      fields: [{ name:"nombre", label:"Nombre de la sección", value:cat.nombre, maxlength:80 }],
+      onSubmit: function(v){
+        if(!v.nombre) return "Escribe un nombre.";
+        return saveCatalog(function(d){ findCat(d, catId).nombre = v.nombre; }, "Sección renombrada.");
+      }
+    });
+  }
+
+  function editJefes(){
+    openForm({
+      title: "Jefes y jefas de servicio",
+      sub: "Una línea por servicio, con el formato  Servicio | Nombre.",
+      wide: true,
+      fields: [{
+        name:"lista", label:"Lista", type:"textarea",
+        value: catalog.jefes.map(function(j){ return j.servicio + " | " + j.nombre; }).join("\n"),
+        hint: "Ejemplo: Enfermería | Lic. Enf. Nombre Apellido"
+      }],
+      onSubmit: function(v){
+        var jefes = v.lista.split("\n").map(function(line){
+          var parts = line.split("|");
+          return { servicio:(parts[0] || "").trim(), nombre:parts.slice(1).join("|").trim() };
+        }).filter(function(j){ return j.servicio || j.nombre; });
+        return saveCatalog(function(d){ d.jefes = jefes; }, "Lista de jefes actualizada.");
+      }
+    });
+  }
+
+  function showLogs(){
+    api("/api/admin/logs").then(function(res){
+      if(!res || !res.ok){ toast(errorText(res), true); return; }
+      var wrap = el("div", "log-wrap");
+      if(!res.ingresos.length){
+        wrap.appendChild(el("p", "doc-empty", "Aún no hay ingresos registrados."));
+      } else {
+        var table = el("table", "log-table");
+        var head = el("tr");
+        head.appendChild(el("th", "", "Fecha y hora"));
+        head.appendChild(el("th", "", "Correo"));
+        table.appendChild(head);
+        res.ingresos.forEach(function(i){
+          var tr = el("tr");
+          tr.appendChild(el("td", "", new Date(i.fecha).toLocaleString("es-PE", { dateStyle:"short", timeStyle:"short" })));
+          tr.appendChild(el("td", "", i.correo));
+          table.appendChild(tr);
+        });
+        wrap.appendChild(table);
+      }
+      openForm({ title:"Registro de ingresos", sub:"Últimos " + res.ingresos.length + " ingresos (se conservan 90 días).", wide:true, content:wrap });
+    });
+  }
+
+  document.getElementById("adminUpload").addEventListener("click", function(){ openUpload(null); });
+  document.getElementById("adminNewCat").addEventListener("click", newCategory);
+  document.getElementById("adminJefes").addEventListener("click", editJefes);
+  document.getElementById("adminLogs").addEventListener("click", showLogs);
+
+  /* ---- Subida de documentos (uno o varios PDF) ---- */
+  var uploadModal = document.getElementById("uploadModal");
+  var uploadInput = document.getElementById("uploadInput");
+  var uploadList = document.getElementById("uploadList");
+  var uploadStart = document.getElementById("uploadStart");
+  var dropZone = document.getElementById("dropZone");
+  var uploadItems = [];
+  var uploadCat = null;
+  var uploading = false;
+
+  function openUpload(catId){
+    if(!catalog.categorias.length){ toast("Primero crea una sección.", true); return; }
+    uploadCat = catId || catalog.categorias[0].id;
+    uploadItems = [];
+    renderUploadList();
+    uploadModal.classList.add("open");
+  }
+
+  function closeUpload(){
+    if(uploading) return;
+    uploadModal.classList.remove("open");
+  }
+
+  function addFiles(files){
+    Array.prototype.forEach.call(files, function(file){
+      var item = { file:file, titulo:titleFromFile(file.name), periodo:periodFromName(file.name), descripcion:"", seccion:uploadCat, estado:"pendiente", mensaje:"" };
+      if(!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){ item.estado = "error"; item.mensaje = "No es un archivo PDF."; }
+      else if(file.size > MAX_MB * 1048576){ item.estado = "error"; item.mensaje = "Supera el límite de " + MAX_MB + " MB (" + formatSize(file.size) + "). Comprime el PDF antes de subirlo."; }
+      uploadItems.push(item);
+    });
+    renderUploadList();
+  }
+
+  function renderUploadList(){
+    uploadList.innerHTML = "";
+    uploadItems.forEach(function(item, i){
+      var box = el("div", "up-item" + (item.estado === "listo" ? " done" : item.estado === "error" ? " error" : item.estado === "enviando" ? " sending" : ""));
+      var head = el("div", "up-head");
+      head.appendChild(el("span", "name", "📄 " + item.file.name));
+      head.appendChild(el("span", "", formatSize(item.file.size)));
+      if(item.estado !== "listo" && !uploading){
+        head.appendChild(toolBtn("✕", "Quitar de la lista", function(){ uploadItems.splice(i, 1); renderUploadList(); }));
+      }
+      box.appendChild(head);
+
+      if(item.estado === "pendiente" || item.estado === "enviando" || (item.estado === "error" && item.reintentable)){
+        var grid = el("div", "up-grid");
+        var t = el("input"); t.value = item.titulo; t.placeholder = "Título"; t.maxLength = 160; t.title = "Título";
+        t.addEventListener("input", function(){ item.titulo = t.value; });
+        var p = el("input"); p.value = item.periodo; p.placeholder = "Período"; p.maxLength = 40; p.title = "Período";
+        p.addEventListener("input", function(){ item.periodo = p.value; });
+        var s = el("select"); s.title = "Sección";
+        categoryOptions().forEach(function(o){ var opt = el("option", "", o.label); opt.value = o.value; s.appendChild(opt); });
+        s.value = item.seccion;
+        s.addEventListener("change", function(){ item.seccion = s.value; });
+        var d = el("input", "full"); d.value = item.descripcion; d.placeholder = "Descripción (opcional)"; d.maxLength = 300;
+        d.addEventListener("input", function(){ item.descripcion = d.value; });
+        [t, p, s, d].forEach(function(x){ x.disabled = uploading; grid.appendChild(x); });
+        box.appendChild(grid);
+      }
+      var bar = el("div", "up-bar");
+      var fill = el("span");
+      fill.style.width = (item.progreso || 0) + "%";
+      bar.appendChild(fill);
+      box.appendChild(bar);
+      item.barEl = fill;
+      if(item.mensaje) box.appendChild(el("div", "up-status", item.mensaje));
+      uploadList.appendChild(box);
+    });
+    var pending = uploadItems.filter(function(x){ return x.estado === "pendiente" || (x.estado === "error" && x.reintentable); }).length;
+    uploadStart.disabled = uploading || pending === 0;
+    uploadStart.textContent = uploading ? "Publicando…" : pending ? "Publicar " + pending + " documento" + (pending > 1 ? "s" : "") : "Publicar";
+    document.getElementById("uploadCancel").disabled = uploading;
+  }
+
+  function uploadOne(item){
+    return new Promise(function(resolve){
+      var form = new FormData();
+      form.append("file", item.file);
+      form.append("titulo", item.titulo.trim() || titleFromFile(item.file.name));
+      form.append("periodo", item.periodo.trim());
+      form.append("descripcion", item.descripcion.trim());
+      form.append("categoriaId", item.seccion);
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/admin/upload");
+      xhr.upload.onprogress = function(e){
+        if(e.lengthComputable && item.barEl){ item.progreso = Math.round(e.loaded / e.total * 100); item.barEl.style.width = item.progreso + "%"; }
+      };
+      xhr.onload = function(){
+        var res = null;
+        try{ res = JSON.parse(xhr.responseText); }catch(e){}
+        if(res && res.ok){
+          catalog = res.catalog;
+          item.estado = "listo";
+          item.mensaje = "✓ Publicado";
+        } else {
+          item.estado = "error";
+          item.reintentable = !(res && (res.error === "pdf" || res.error === "grande"));
+          item.mensaje = errorText(res || { error:"red" });
+        }
+        resolve();
+      };
+      xhr.onerror = function(){
+        item.estado = "error"; item.reintentable = true; item.mensaje = errorText({ error:"red" }); resolve();
+      };
+      xhr.send(form);
+    });
+  }
+
+  function startUpload(){
+    var queue = uploadItems.filter(function(x){ return x.estado === "pendiente" || (x.estado === "error" && x.reintentable); });
+    if(!queue.length || uploading) return;
+    uploading = true;
+    var done = 0;
+    queue.reduce(function(chain, item){
+      return chain.then(function(){
+        item.estado = "enviando"; item.mensaje = "Subiendo…"; item.progreso = 0;
+        renderUploadList();
+        return uploadOne(item).then(function(){ if(item.estado === "listo") done++; renderUploadList(); });
+      });
+    }, Promise.resolve()).then(function(){
+      uploading = false;
+      renderUploadList();
+      renderAll();
+      var failed = queue.length - done;
+      if(done) toast(done + " documento" + (done > 1 ? "s publicados" : " publicado") + (failed ? " · " + failed + " con error" : "."), !!failed);
+      else toast("No se pudo publicar ningún documento. Revisa los mensajes.", true);
+      if(!failed) setTimeout(closeUpload, 1200);
+    });
+  }
+
+  dropZone.addEventListener("click", function(){ uploadInput.click(); });
+  dropZone.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); uploadInput.click(); } });
+  uploadInput.addEventListener("change", function(){ addFiles(uploadInput.files); uploadInput.value = ""; });
+  ["dragenter", "dragover"].forEach(function(ev){
+    dropZone.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); dropZone.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function(ev){
+    dropZone.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); dropZone.classList.remove("over"); });
+  });
+  dropZone.addEventListener("drop", function(e){ if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+  // Soltar archivos sobre la ventana (fuera de la zona) no debe abrir el PDF en el navegador
+  uploadModal.addEventListener("dragover", function(e){ e.preventDefault(); });
+  uploadModal.addEventListener("drop", function(e){ e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+  uploadStart.addEventListener("click", startUpload);
+  document.getElementById("uploadCancel").addEventListener("click", closeUpload);
+  uploadModal.addEventListener("click", function(e){ if(e.target === uploadModal) closeUpload(); });
 
   /* ---- Visor PDF.js ---- */
   var currentPdf = null;
@@ -1137,17 +1560,24 @@
       renderPage(currentPage);
     }).catch(function(err){
       if(seq !== loadSeq) return;
+      if(err && (err.status === 401 || err.status === 503)){
+        // La sesión venció (8 h), se cambió la clave o el correo salió de la lista: volver al ingreso
+        closeViewer();
+        accessEmail = null;
+        checkSession();
+        return;
+      }
       viewerLoading.textContent = errMsg;
       console.error(err);
     });
   }
 
   function openViewer(doc){
-    loadPdf(doc.titulo, doc.file, "No se pudo cargar el documento. Verifica que el archivo esté en la carpeta docs/.");
+    loadPdf(doc.titulo, doc.url, "No se pudo cargar el documento. Si el problema continúa, avisa al Área de Administración.");
   }
 
   function drawWatermark(){
-    // Con Cloudflare Access la marca identifica a quien visualiza: una captura queda trazable a su correo
+    // La marca identifica a quien visualiza: una captura queda trazable a su correo
     var text = accessEmail
       ? "CLAS AGREGADO LA QUERENCIA · " + accessEmail + " · " + new Date().toLocaleDateString("es-PE")
       : "CLAS AGREGADO LA QUERENCIA · USO INTERNO · NO REPRODUCIR";
@@ -1238,10 +1668,6 @@
     if(currentPdf && currentPage < currentPdf.numPages){ currentPage++; renderPage(currentPage); }
   });
 
-  function openViewerLocal(doc){
-    loadPdf(doc.titulo, {data: new Uint8Array(doc._data)}, "No se pudo cargar el documento local.");
-  }
-
   function closeViewer(){
     overlay.classList.remove("open");
     document.body.style.overflow = "";
@@ -1262,6 +1688,8 @@
     }, 200);
   });
   document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && formModal.classList.contains("open")){ closeForm(); return; }
+    if(e.key === "Escape" && uploadModal.classList.contains("open")){ closeUpload(); return; }
     if(!overlay.classList.contains("open")) return;
     if(e.key === "Escape") closeViewer();
     if(e.key === "ArrowRight" && !nextBtn.disabled) nextBtn.click();
@@ -1289,25 +1717,9 @@
     el.textContent = currentYear;
   });
 
-  if(ADMIN_MODE){ document.getElementById("adminNote").style.display = ""; }
 
-  /* ---- Arranque: Cloudflare Access si está activo; si no, pantalla de clave ---- */
-  initImportDB(function(){
-    initCloudDocs(function(){
-      checkAccessIdentity(function(email){
-        document.body.classList.remove("checking");
-        if(email){
-          accessEmail = email;
-          document.getElementById("userEmail").textContent = email;
-          showPortal();
-          return;
-        }
-        try{
-          if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
-        }catch(e){}
-      });
-    });
-  });
+  /* ---- Arranque ---- */
+  checkSession();
 
 })();
 </script>

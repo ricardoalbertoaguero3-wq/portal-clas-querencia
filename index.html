@@ -633,6 +633,9 @@
   // URL del Cloudflare Worker (dejar vacío si no está configurado aún)
   var WORKER_URL = "";
 
+  // El botón "+ Importar" solo se muestra abriendo el portal con ?admin en la URL
+  var ADMIN_MODE = /[?&]admin(=|&|$)/.test(location.search);
+
   if (window['pdfjsLib']) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
@@ -644,22 +647,22 @@
         docs: [
           { titulo:"Plan de Mantenimiento Preventivo y Correctivo", descripcion:"Equipos informáticos y biomédicos del CLAS.", periodo:"2026", file:"docs/plan-mantenimiento-2026.pdf" },
           { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf", native:true },
-          { titulo:"Informe de Situación Institucional", descripcion:"Informe de situación institucional del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/INFORME_SITUACION_INSTITUCIONAL_CLAS_LA_QUERENCIA_2025_COMPLETA TERMINADA.pdf" }
+          { titulo:"Informe de Situación Institucional", descripcion:"Informe de situación institucional del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/informe-situacion-institucional-2025.pdf" }
         ]
       },
       {
         nombre: "Intervención Sanitaria / Epidemiológico / Brechas",
         docs: [
           { titulo:"ASIS — Análisis de Situación de Salud", descripcion:"Análisis de Situación de Salud del CLAS Agregado La Querencia.", periodo:"2026", file:"docs/asis-2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — CLAS Agregado", descripcion:"Reporte de producción de servicios, I Semestre acumulado.", periodo:"2026", file:"docs/morbilidad-clas-agregado-i-sem-2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — C.S. La Querencia", descripcion:"Reporte de producción de servicios del establecimiento sede — I Semestre 2026.", periodo:"2026", file:"docs/Informe de Productividad y Morbilidad _I SEMESTRE_C.S. CLAS LA QUERENCIA_2026.pdf" },
-          { titulo:"Informe de Morbilidad y Producción — C.S. CLAS La Querencia", descripcion:"Reporte de producción de servicios del establecimiento sede.", periodo:"Julio 2026", file:"docs/morbilidad-cs-querencia-julio-2026.pdf" }
+          { titulo:"Informe de Morbilidad y Producción — CLAS Agregado (I Semestre)", descripcion:"Reporte de producción de servicios del CLAS Agregado, I Semestre acumulado.", periodo:"I Sem. 2026", file:"docs/morbilidad-clas-agregado-i-sem-2026.pdf" },
+          { titulo:"Informe de Morbilidad y Producción — C.S. La Querencia (I Semestre)", descripcion:"Reporte de producción de servicios del establecimiento sede, I Semestre acumulado.", periodo:"I Sem. 2026", file:"docs/morbilidad-cs-querencia-i-sem-2026.pdf" },
+          { titulo:"Informe de Morbilidad y Producción — C.S. La Querencia (Julio)", descripcion:"Reporte mensual de producción de servicios del establecimiento sede.", periodo:"Julio 2026", file:"docs/morbilidad-cs-querencia-julio-2026.pdf" }
         ]
       },
       {
         nombre: "Programación del Rol (RR.HH.)",
         docs: [
-          { titulo:"Rol del Personal — Agosto 2026", descripcion:"Programación mensual de turnos del personal.", periodo:"2026", file:"docs/rol-personal-agosto-2026.pdf" }
+          { titulo:"Rol del Personal — Agosto 2026", descripcion:"Programación mensual de turnos del personal.", periodo:"Agosto 2026", file:"docs/rol-personal-agosto-2026.pdf" }
         ]
       }
     ],
@@ -862,14 +865,16 @@
       var countBadge = document.createElement("span");
       countBadge.className = "tag-count";
       countBadge.textContent = allDocs.length + " doc.";
-      var importBtn = document.createElement("button");
-      importBtn.className = "btn-import";
-      importBtn.type = "button";
-      importBtn.textContent = "+ Importar";
-      (function(cn){ importBtn.addEventListener("click", function(){ openImportModal(cn); }); })(cat.nombre);
       h.appendChild(nameNode);
       h.appendChild(countBadge);
-      h.appendChild(importBtn);
+      if(ADMIN_MODE){
+        var importBtn = document.createElement("button");
+        importBtn.className = "btn-import";
+        importBtn.type = "button";
+        importBtn.textContent = "+ Importar";
+        (function(cn){ importBtn.addEventListener("click", function(){ openImportModal(cn); }); })(cat.nombre);
+        h.appendChild(importBtn);
+      }
       wrap.appendChild(h);
 
       if(imported.length > 0 || cloud.length > 0){
@@ -1064,12 +1069,12 @@
   /* ---- Visor PDF.js ---- */
   var currentPdf = null;
   var currentPage = 1;
+  var renderTask = null;   // dibujo en curso sobre el canvas
+  var pendingPage = null;  // página pedida mientras otra se dibujaba
+  var loadSeq = 0;         // invalida cargas que terminan después de cerrar el visor
 
-  function openViewer(doc){
-    if(doc.native || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-      window.open(doc.file,'_blank'); return;
-    }    
-    viewerTitle.textContent = doc.titulo;
+  function loadPdf(titulo, src, errMsg){
+    viewerTitle.textContent = titulo;
     canvas.style.display = "none";
     viewerLoading.style.display = "block";
     viewerLoading.textContent = "Cargando documento…";
@@ -1079,16 +1084,26 @@
     overlay.classList.add("open");
     document.body.style.overflow = "hidden";
 
-    pdfjsLib.getDocument(doc.file).promise.then(function(pdf){
+    var seq = ++loadSeq;
+    pdfjsLib.getDocument(src).promise.then(function(pdf){
+      if(seq !== loadSeq){ pdf.destroy(); return; }
       currentPdf = pdf;
       currentPage = 1;
       viewerLoading.style.display = "none";
       canvas.style.display = "block";
       renderPage(currentPage);
     }).catch(function(err){
-      viewerLoading.textContent = "No se pudo cargar el documento. Verifica que el archivo esté en la carpeta docs/.";
+      if(seq !== loadSeq) return;
+      viewerLoading.textContent = errMsg;
       console.error(err);
     });
+  }
+
+  function openViewer(doc){
+    if(doc.native || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+      window.open(doc.file,'_blank'); return;
+    }
+    loadPdf(doc.titulo, doc.file, "No se pudo cargar el documento. Verifica que el archivo esté en la carpeta docs/.");
   }
 
   function drawWatermark(){
@@ -1111,22 +1126,37 @@
   }
 
   function renderPage(num){
-    currentPdf.getPage(num).then(function(page){
+    // PDF.js no admite dos dibujos a la vez sobre el mismo canvas: se encola la última página pedida
+    if(renderTask){ pendingPage = num; return; }
+    var pdf = currentPdf;
+    renderTask = true;
+    pdf.getPage(num).then(function(page){
+      if(pdf !== currentPdf){ renderTask = null; return; }
       var unscaled = page.getViewport({ scale: 1 });
       var maxWidth = Math.min(viewerBody.clientWidth - 48, 1000);
-            var dpr = window.devicePixelRatio || 1;
+      var dpr = window.devicePixelRatio || 1;
       var scale = Math.min(maxWidth / unscaled.width, 2.5) * dpr;
       var viewport = page.getViewport({ scale: scale });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       canvas.style.width = (viewport.width / dpr) + 'px';
       canvas.style.height = (viewport.height / dpr) + 'px';
-      page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function(){
+      renderTask = page.render({ canvasContext: ctx, viewport: viewport });
+      return renderTask.promise.then(function(){
         drawWatermark();
-        pageIndicator.textContent = num + " / " + currentPdf.numPages;
+        pageIndicator.textContent = num + " / " + pdf.numPages;
         prevBtn.disabled = (num <= 1);
-        nextBtn.disabled = (num >= currentPdf.numPages);
+        nextBtn.disabled = (num >= pdf.numPages);
       });
+    }).catch(function(err){
+      if(!err || err.name !== "RenderingCancelledException") console.error(err);
+    }).then(function(){
+      renderTask = null;
+      if(pendingPage !== null && currentPdf){
+        var next = pendingPage;
+        pendingPage = null;
+        renderPage(next);
+      }
     });
   }
 
@@ -1144,33 +1174,28 @@
       window.open(url,"_blank");
       return;
     }
-    viewerTitle.textContent = doc.titulo;
-    canvas.style.display = "none";
-    viewerLoading.style.display = "block";
-    viewerLoading.textContent = "Cargando documento…";
-    pageIndicator.textContent = "– / –";
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    overlay.classList.add("open");
-    document.body.style.overflow = "hidden";
-    pdfjsLib.getDocument({data: new Uint8Array(doc._data)}).promise.then(function(pdf){
-      currentPdf = pdf;
-      currentPage = 1;
-      viewerLoading.style.display = "none";
-      canvas.style.display = "block";
-      renderPage(currentPage);
-    }).catch(function(err){
-      viewerLoading.textContent = "No se pudo cargar el documento local.";
-      console.error(err);
-    });
+    loadPdf(doc.titulo, {data: new Uint8Array(doc._data)}, "No se pudo cargar el documento local.");
   }
 
   function closeViewer(){
     overlay.classList.remove("open");
     document.body.style.overflow = "";
+    loadSeq++;
+    pendingPage = null;
+    if(renderTask && renderTask.cancel){ renderTask.cancel(); }
+    if(currentPdf){ currentPdf.destroy(); }
     currentPdf = null;
   }
   viewerClose.addEventListener("click", closeViewer);
+
+  // Volver a dibujar la página al cambiar el tamaño de la ventana
+  var resizeTimer = null;
+  window.addEventListener("resize", function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      if(overlay.classList.contains("open") && currentPdf){ renderPage(currentPage); }
+    }, 200);
+  });
   document.addEventListener("keydown", function(e){
     if(!overlay.classList.contains("open")) return;
     if(e.key === "Escape") closeViewer();

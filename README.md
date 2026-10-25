@@ -9,18 +9,27 @@ mensuales del CLAS Agregado La Querencia. Publicado como sitio estático
 ```
 /
 ├── index.html          ← el portal completo (HTML + CSS + JS, un solo archivo)
+├── worker/index.js      ← API opcional en Cloudflare Worker + R2 (aún no desplegada)
+├── wrangler.toml        ← configuración del Worker
 └── docs/                ← los PDF que se muestran en el portal
-    ├── asis-2026.pdf
-    ├── inventario-2025.pdf
+    ├── logo.png
     ├── plan-mantenimiento-2026.pdf
-    ├── rol-personal-agosto-2026.pdf
-    └── morbilidad-clas-agregado-i-sem-2026.pdf
+    ├── inventario-2025.pdf
+    ├── informe-situacion-institucional-2025.pdf
+    ├── asis-2026.pdf
+    ├── morbilidad-clas-agregado-i-sem-2026.pdf
+    ├── morbilidad-cs-querencia-i-sem-2026.pdf
+    ├── morbilidad-cs-querencia-julio-2026.pdf
+    └── rol-personal-agosto-2026.pdf
 ```
 
 ## Cómo funciona
 
-- **Acceso:** pantalla con clave institucional (actualmente `Querencia2026`,
-  editable en el archivo `index.html`, variable `PASSWORD`).
+- **Acceso:** pantalla con clave institucional compartida (se define en
+  `index.html`, variable `PASSWORD`; no se anota en este README). La clave
+  queda visible en el código fuente de la página y los PDF de `docs/` se
+  pueden abrir por su dirección directa: es una barrera disuasoria, no un
+  control de acceso real (ver "Pendiente: verificación por correo").
 - **Visor:** cada documento se abre en un visor propio (PDF.js), página por
   página, con marca de agua institucional superpuesta. No hay botón de
   descarga ni impresión porque el visor es código propio del portal.
@@ -46,10 +55,19 @@ mensuales del CLAS Agregado La Querencia. Publicado como sitio estático
 4. Sube los cambios al repositorio (commit). GitHub Pages actualiza el
    sitio automáticamente en uno o dos minutos.
 
-## Documentos pendientes de cargar
+## Importación de documentos (solo administración)
 
-- Informe de Situación Institucional
-- Informe de Morbilidad y Producción — C.S. La Querencia (I Semestre 2026)
+El botón **"+ Importar"** de cada sección está oculto para el personal. Se
+muestra solo al abrir el portal con `?admin` al final de la dirección (por
+ejemplo `https://…/portal-clas-querencia/?admin`).
+
+- Mientras el Worker no esté desplegado (`WORKER_URL` vacío en `index.html`),
+  el archivo importado se guarda **solo en el navegador de quien lo importa**
+  (aparece con la etiqueta "local"); nadie más lo ve. Para publicarlo para
+  todos, seguir "Cómo agregar o reemplazar un documento".
+- Antes de desplegar el Worker, definir `UPLOAD_SECRET` distinto de la clave
+  del portal y ajustar `index.html` en consecuencia: hoy el portal envía la
+  misma clave de acceso como permiso de subida y borrado.
 
 ## Cómo editar la lista de jefes y jefas de servicio
 

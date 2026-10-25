@@ -14,4 +14,4 @@ id = "REEMPLAZAR_CON_KV_NAMESPACE_ID"
 
 # Secreto UPLOAD_SECRET: configurar con:
 # wrangler secret put UPLOAD_SECRET
-# (ingresar la contraseña del portal cuando lo solicite)
+# (usar una clave propia, distinta de PORTAL_PASSWORD del portal)

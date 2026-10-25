@@ -104,6 +104,15 @@
     display:none;
   }
   .lock-error.show{ display:block; }
+  .lock-steps{ display:flex; justify-content:center; gap:8px; margin:0 0 18px; font-size:12px; }
+  .lock-step{ padding:4px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted); }
+  .lock-step.done{ background:#e8f3ea; border-color:#bcdcc2; color:#2f6b3a; }
+  .lock-step.current{ border-color:var(--gold); color:#7a5a1d; font-weight:600; }
+  .lock-email{ font-size:13.5px; color:var(--ink); margin:0 0 14px; word-break:break-all; }
+  .lock-msg{ font-size:13.5px; line-height:1.6; color:var(--danger); background:var(--danger-bg); border:1px solid #e7c9c4; border-radius:8px; padding:12px 14px; margin:0; display:none; }
+  .lock-msg.show{ display:block; }
+  #pwForm.hidden{ display:none; }
+  .lock-card button:disabled{ opacity:.6; cursor:default; }
   .lock-foot{ font-size:12px; color:var(--muted); margin-top:22px; }
   .lock-copyright{ font-size:11px; color:#a39d92; margin-top:10px; }
   /* Mientras se verifica Cloudflare Access no se muestra la tarjeta de clave */
@@ -514,10 +523,18 @@
       <div class="logo-circle"><img src="docs/logo.png" alt="Logo CLAS Agregado La Querencia"></div>
       <h1>CLAS Agregado La Querencia</h1>
       <p class="sub">Portal de Documentos de Gestión<br>Acceso solo para personal institucional</p>
-      <input type="password" id="pwInput" placeholder="Clave de acceso" autocomplete="off">
-      <button id="pwSubmit">Ingresar</button>
-      <p class="lock-error" id="pwError">Clave incorrecta. Intenta nuevamente.</p>
-      <p class="lock-foot">Si no cuentas con la clave, solicítala a Gerencia o a tu jefe de servicio.</p>
+      <div class="lock-steps" id="lockSteps" aria-hidden="true" style="display:none;">
+        <span class="lock-step done">1 · Correo y código ✓</span>
+        <span class="lock-step current">2 · Clave</span>
+      </div>
+      <p class="lock-msg" id="lockMsg"></p>
+      <div id="pwForm" class="hidden">
+        <p class="lock-email">Correo verificado: <strong id="lockEmail"></strong></p>
+        <input type="password" id="pwInput" placeholder="Clave de acceso" autocomplete="current-password">
+        <button id="pwSubmit">Ingresar</button>
+        <p class="lock-error" id="pwError">Clave incorrecta. Intenta nuevamente.</p>
+      </div>
+      <p class="lock-foot">Si no cuentas con acceso, solicítalo al Área de Administración.</p>
       <p class="lock-copyright">© <span id="yearLock"></span> CLAS Agregado La Querencia. Todos los derechos reservados.<br>Elaborado por Lic. Adm. Ricardo A. Agüero Angulo.</p>
     </div>
   </div>
@@ -640,16 +657,13 @@
 (function(){
   "use strict";
 
-  var PASSWORD = "Querencia2026";
-  var SESSION_KEY = "claq_unlocked";
-
   // URL del Cloudflare Worker (dejar vacío si no está configurado aún)
   var WORKER_URL = "";
 
   // El botón "+ Importar" solo se muestra abriendo el portal con ?admin en la URL
   var ADMIN_MODE = /[?&]admin(=|&|$)/.test(location.search);
 
-  // Correo verificado por Cloudflare Access; null cuando el portal no está detrás de Access (modo clave)
+  // Correo del usuario con sesión abierta (verificado por Cloudflare Access y con clave validada en el servidor)
   var accessEmail = null;
 
   if (window['pdfjsLib']) {
@@ -704,6 +718,9 @@
   var pwInput = document.getElementById("pwInput");
   var pwSubmit = document.getElementById("pwSubmit");
   var pwError = document.getElementById("pwError");
+  var pwForm = document.getElementById("pwForm");
+  var lockMsg = document.getElementById("lockMsg");
+  var lockEmail = document.getElementById("lockEmail");
   var lockBtn = document.getElementById("lockBtn");
   var overlay = document.getElementById("viewerOverlay");
   var viewerTitle = document.getElementById("viewerTitle");
@@ -732,37 +749,90 @@
     pwError.classList.remove("show");
   }
 
+  function showLockMessage(msg){
+    showLock();
+    pwForm.classList.add("hidden");
+    document.getElementById("lockSteps").style.display = "none";
+    lockMsg.textContent = msg;
+    lockMsg.classList.add("show");
+  }
+
+  function showPasswordStep(email){
+    showLock();
+    lockMsg.classList.remove("show");
+    lockEmail.textContent = email;
+    document.getElementById("lockSteps").style.display = "";
+    pwForm.classList.remove("hidden");
+    pwInput.focus();
+  }
+
+  /* ---- Ingreso: 1) correo + código (Cloudflare Access)  2) clave validada en el servidor ---- */
+  function checkSession(){
+    fetch("/api/session", { credentials:"same-origin", cache:"no-store" })
+      .then(function(r){
+        var type = r.headers.get("Content-Type") || "";
+        return type.indexOf("application/json") >= 0 ? r.json() : null;
+      })
+      .catch(function(){ return null; })
+      .then(function(st){
+        document.body.classList.remove("checking");
+        if(!st){
+          // Sin funciones de servidor (otro hosting o archivo abierto en local)
+          showLockMessage("Este portal solo funciona desde su dirección oficial: portal-clas-querencia.pages.dev");
+        } else if(st.ok && st.unlocked){
+          accessEmail = st.email;
+          document.getElementById("userEmail").textContent = st.email;
+          showPortal();
+        } else if(st.ok){
+          showPasswordStep(st.email);
+        } else if(st.error === "access"){
+          showLockMessage("No se verificó tu correo. Cierra esta pestaña y vuelve a abrir el portal para ingresar tu correo y el código que te llegará.");
+        } else if(st.error === "config"){
+          showLockMessage("El portal aún no está configurado. Comunícate con el Área de Administración.");
+        } else {
+          showLockMessage("No se pudo verificar el acceso en este momento. Intenta nuevamente en unos minutos.");
+        }
+      });
+  }
+
   function tryUnlock(){
-    if(pwInput.value === PASSWORD){
-      try{ sessionStorage.setItem(SESSION_KEY, "1"); }catch(e){}
-      showPortal();
-    } else {
-      pwError.classList.add("show");
-    }
+    if(!pwInput.value || pwSubmit.disabled) return;
+    pwSubmit.disabled = true;
+    pwSubmit.textContent = "Verificando…";
+    fetch("/api/login", {
+      method:"POST",
+      credentials:"same-origin",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ clave: pwInput.value })
+    })
+      .then(function(r){ return r.json().catch(function(){ return { ok:false }; }); })
+      .catch(function(){ return { ok:false, error:"red" }; })
+      .then(function(res){
+        pwSubmit.disabled = false;
+        pwSubmit.textContent = "Ingresar";
+        if(res.ok){
+          pwInput.value = "";
+          checkSession();
+        } else if(res.error === "clave"){
+          pwError.textContent = "Clave incorrecta. Intenta nuevamente.";
+          pwError.classList.add("show");
+          pwInput.select();
+        } else {
+          pwError.textContent = "No se pudo verificar la clave. Recarga la página e intenta nuevamente.";
+          pwError.classList.add("show");
+        }
+      });
   }
   pwSubmit.addEventListener("click", tryUnlock);
   pwInput.addEventListener("keydown", function(e){
     if(e.key === "Enter") tryUnlock();
-    pwError.classList.remove("show");
+    else pwError.classList.remove("show");
   });
   lockBtn.addEventListener("click", function(){
-    if(accessEmail){ location.href = "/cdn-cgi/access/logout"; return; }
-    try{ sessionStorage.removeItem(SESSION_KEY); }catch(e){}
-    showLock();
+    fetch("/api/logout", { method:"POST", credentials:"same-origin" })
+      .catch(function(){})
+      .then(function(){ location.href = "/cdn-cgi/access/logout"; });
   });
-
-  /* ---- Cloudflare Access: si el portal está protegido, se usa el correo verificado ---- */
-  function checkAccessIdentity(cb){
-    var done = false;
-    function finish(email){ if(done) return; done = true; cb(email); }
-    setTimeout(function(){ finish(null); }, 4000);
-    try{
-      fetch("/cdn-cgi/access/get-identity", { credentials:"same-origin", cache:"no-store" })
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(id){ finish(id && id.email ? String(id.email) : null); })
-        .catch(function(){ finish(null); });
-    }catch(e){ finish(null); }
-  }
 
   /* ---- IndexedDB para importaciones locales ---- */
   var importDB = null;
@@ -819,6 +889,13 @@
       .catch(function(){ cb(); });
   }
 
+  // Clave de subida del Worker (UPLOAD_SECRET); se pide una vez por sesión y no se guarda
+  var uploadToken = "";
+  function getUploadToken(){
+    if(!uploadToken){ uploadToken = window.prompt("Clave de subida del servidor de documentos:") || ""; }
+    return uploadToken;
+  }
+
   function saveCloudDoc(catNombre, titulo, periodo, file, cb){
     if(!WORKER_URL){ cb(null); return; }
     var form = new FormData();
@@ -828,7 +905,7 @@
     form.append("periodo", periodo);
     fetch(WORKER_URL + "/api/upload", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + PASSWORD },
+      headers: { "Authorization": "Bearer " + getUploadToken() },
       body: form
     })
       .then(function(r){ return r.ok ? r.json() : null; })
@@ -843,7 +920,7 @@
     if(!WORKER_URL){ cb(); return; }
     fetch(WORKER_URL + "/api/docs/" + id, {
       method: "DELETE",
-      headers: { "Authorization": "Bearer " + PASSWORD }
+      headers: { "Authorization": "Bearer " + getUploadToken() }
     }).then(function(){ cb(); }).catch(function(){ cb(); });
   }
 
@@ -1137,6 +1214,13 @@
       renderPage(currentPage);
     }).catch(function(err){
       if(seq !== loadSeq) return;
+      if(err && (err.status === 401 || err.status === 503)){
+        // La sesión venció (8 h) o se cambió la clave: volver a la pantalla de ingreso
+        closeViewer();
+        accessEmail = null;
+        checkSession();
+        return;
+      }
       viewerLoading.textContent = errMsg;
       console.error(err);
     });
@@ -1291,22 +1375,9 @@
 
   if(ADMIN_MODE){ document.getElementById("adminNote").style.display = ""; }
 
-  /* ---- Arranque: Cloudflare Access si está activo; si no, pantalla de clave ---- */
+  /* ---- Arranque ---- */
   initImportDB(function(){
-    initCloudDocs(function(){
-      checkAccessIdentity(function(email){
-        document.body.classList.remove("checking");
-        if(email){
-          accessEmail = email;
-          document.getElementById("userEmail").textContent = email;
-          showPortal();
-          return;
-        }
-        try{
-          if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
-        }catch(e){}
-      });
-    });
+    initCloudDocs(checkSession);
   });
 
 })();

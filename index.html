@@ -798,6 +798,7 @@
   function errorText(res){
     var msg = ERRORS[res && res.error] || "No se pudo completar la operación. Intenta nuevamente.";
     if(res && res.error === "codigo" && res.restantes) msg += " Te quedan " + res.restantes + " intento(s).";
+    if(res && res.error === "envio" && res.detalle) msg += " (Detalle: " + res.detalle + ")";
     return msg;
   }
 

@@ -24,21 +24,28 @@ export async function onRequestPost({ request, env }) {
   await env.AUTH_KV.put(`otp:${email}`, JSON.stringify({ hash: await codeHash(email, code, env), exp, attempts: 0 }), { expiration: exp });
   await env.AUTH_KV.put(`rl:last:${email}`, '1', { expirationTtl: 60 });
 
-  let sent = false;
-  try {
-    const r = await fetch(env.MAIL_WEBHOOK_URL, {
+  // detalle: motivo breve del fallo para diagnosticar la configuración (no incluye datos secretos)
+  let detalle = '';
+  const url = String(env.MAIL_WEBHOOK_URL).trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) detalle = 'la URL del script no tiene el formato https://script.google.com/macros/s/…/exec';
+  else try {
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: env.MAIL_WEBHOOK_SECRET, to: email, code, minutos: CODE_MINUTES }),
     });
-    sent = !!(await r.json()).ok;
-  } catch {
-    sent = false;
+    const text = await r.text();
+    let res = null;
+    try { res = JSON.parse(text); } catch { /* respuesta no JSON */ }
+    if (!res) detalle = `respuesta no válida (HTTP ${r.status}${/accounts\.google|ServiceLogin/.test(text) ? ', pide iniciar sesión' : ''})`;
+    else if (!res.ok) detalle = res.error === 'auth' ? 'secreto distinto' : String(res.error || 'error').slice(0, 80);
+  } catch (e) {
+    detalle = 'sin conexión con el script';
   }
-  if (!sent) {
+  if (detalle) {
     await env.AUTH_KV.delete(`otp:${email}`);
     await env.AUTH_KV.delete(`rl:last:${email}`);
-    return json({ ok: false, error: 'envio' }, 502);
+    return json({ ok: false, error: 'envio', detalle }, 502);
   }
   return json({ ok: true });
 }

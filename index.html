@@ -106,6 +106,8 @@
   .lock-error.show{ display:block; }
   .lock-foot{ font-size:12px; color:var(--muted); margin-top:22px; }
   .lock-copyright{ font-size:11px; color:#a39d92; margin-top:10px; }
+  /* Mientras se verifica Cloudflare Access no se muestra la tarjeta de clave */
+  body.checking .lock-card{ visibility:hidden; }
 
   /* ---------- Portal ---------- */
   #portal{ display:none; }
@@ -123,6 +125,7 @@
   header.top .brand-name{ font-size:19px; }
   header.top .brand-sub{ font-size:12.5px; color:#c9c4ba; font-family:'Lora',serif; }
   header.top .spacer{ flex:1; }
+  .user-email{ font-size:12.5px; color:#c9c4ba; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }
   .btn-ghost{
     background:transparent;
     border:1px solid rgba(255,255,255,0.35);
@@ -466,18 +469,18 @@
   .viewer-body{
     flex:1;
     overflow:auto;
-    display:flex;
-    align-items:flex-start;
-    justify-content:center;
     padding:24px 12px;
     background:#3a3833;
+    text-align:center;
   }
   .viewer-body canvas{
+    display:block;
+    margin:0 auto;
     background:#fff;
     box-shadow:0 6px 24px rgba(0,0,0,0.4);
-    max-width:100%;
   }
   .viewer-loading{ color:#d8d3c9; font-size:14px; padding-top:60px; }
+  .viewer-zoom-label{ font-size:12px; color:#d8d3c9; min-width:42px; text-align:center; }
 
   @media print{
     body::before{
@@ -495,11 +498,15 @@
   @media (max-width:560px){
     main h1.page-title{ font-size:28px; }
     header.top .brand-sub{ display:none; }
-    .viewer-bar .vtitle{ font-size:14px; }
+    .viewer-bar .vtitle{ font-size:14px; flex-basis:100%; }
+    .viewer-bar .vflag{ display:none; }
+    .viewer-bar{ padding:10px 12px; }
+    .viewer-body{ padding:12px 6px; }
+    .user-email{ display:none; }
   }
 </style>
 </head>
-<body>
+<body class="checking">
 
   <!-- ============ PANTALLA DE ACCESO ============ -->
   <div id="lockScreen">
@@ -524,6 +531,7 @@
         <div class="brand-sub">Portal de gestión administrativa</div>
       </div>
       <div class="spacer"></div>
+      <span class="user-email" id="userEmail"></span>
       <button class="btn-ghost" id="lockBtn">Cerrar sesión</button>
     </header>
 
@@ -556,7 +564,7 @@
           conexas). Queda prohibida su reproducción, distribución, comunicación pública o transformación, total o
           parcial, sin autorización expresa de la Gerencia o del Consejo Directivo del CLAS. El acceso a este
           portal es de uso estrictamente institucional e intransferible; el personal autorizado no debe compartir
-          la clave de acceso ni el contenido visualizado con terceros ajenos a la institución.
+          sus credenciales de acceso ni el contenido visualizado con terceros ajenos a la institución.
         </p>
         <p>
           © <span class="yearMain"></span> CLAS Agregado La Querencia. Todos los derechos reservados.<br>
@@ -564,7 +572,7 @@
         </p>
       </div>
 
-      <div class="admin-note">
+      <div class="admin-note" id="adminNote" style="display:none;">
         <strong>Nota para administración:</strong> este portal ya no depende de Google Drive — cada documento
         se sirve como archivo propio (carpeta <code>docs/</code>) y se renderiza con un visor interno (PDF.js)
         que no expone ningún botón de descarga ni impresión, porque el visor es código propio del portal, no el
@@ -614,6 +622,11 @@
         <span class="viewer-page-indicator" id="pageIndicator">– / –</span>
         <button id="nextPage" title="Página siguiente">›</button>
       </div>
+      <div class="viewer-nav">
+        <button id="zoomOut" title="Reducir">−</button>
+        <span class="viewer-zoom-label" id="zoomLabel">100%</span>
+        <button id="zoomIn" title="Ampliar">+</button>
+      </div>
       <span class="vflag">Solo lectura · sin descarga ni impresión</span>
       <button class="viewer-close" id="viewerClose" title="Cerrar">✕</button>
     </div>
@@ -636,6 +649,9 @@
   // El botón "+ Importar" solo se muestra abriendo el portal con ?admin en la URL
   var ADMIN_MODE = /[?&]admin(=|&|$)/.test(location.search);
 
+  // Correo verificado por Cloudflare Access; null cuando el portal no está detrás de Access (modo clave)
+  var accessEmail = null;
+
   if (window['pdfjsLib']) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
@@ -646,7 +662,7 @@
         nombre: "Administrativo",
         docs: [
           { titulo:"Plan de Mantenimiento Preventivo y Correctivo", descripcion:"Equipos informáticos y biomédicos del CLAS.", periodo:"2026", file:"docs/plan-mantenimiento-2026.pdf" },
-          { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf", native:true },
+          { titulo:"Inventario CLAS Querencia", descripcion:"Inventario de bienes y equipos del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/inventario-2025.pdf" },
           { titulo:"Informe de Situación Institucional", descripcion:"Informe de situación institucional del CLAS Agregado La Querencia.", periodo:"2025", file:"docs/informe-situacion-institucional-2025.pdf" }
         ]
       },
@@ -699,6 +715,9 @@
   var prevBtn = document.getElementById("prevPage");
   var nextBtn = document.getElementById("nextPage");
   var pageIndicator = document.getElementById("pageIndicator");
+  var zoomInBtn = document.getElementById("zoomIn");
+  var zoomOutBtn = document.getElementById("zoomOut");
+  var zoomLabel = document.getElementById("zoomLabel");
 
   function showPortal(){
     lockScreen.style.display = "none";
@@ -727,9 +746,23 @@
     pwError.classList.remove("show");
   });
   lockBtn.addEventListener("click", function(){
+    if(accessEmail){ location.href = "/cdn-cgi/access/logout"; return; }
     try{ sessionStorage.removeItem(SESSION_KEY); }catch(e){}
     showLock();
   });
+
+  /* ---- Cloudflare Access: si el portal está protegido, se usa el correo verificado ---- */
+  function checkAccessIdentity(cb){
+    var done = false;
+    function finish(email){ if(done) return; done = true; cb(email); }
+    setTimeout(function(){ finish(null); }, 4000);
+    try{
+      fetch("/cdn-cgi/access/get-identity", { credentials:"same-origin", cache:"no-store" })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(id){ finish(id && id.email ? String(id.email) : null); })
+        .catch(function(){ finish(null); });
+    }catch(e){ finish(null); }
+  }
 
   /* ---- IndexedDB para importaciones locales ---- */
   var importDB = null;
@@ -1072,6 +1105,15 @@
   var renderTask = null;   // dibujo en curso sobre el canvas
   var pendingPage = null;  // página pedida mientras otra se dibujaba
   var loadSeq = 0;         // invalida cargas que terminan después de cerrar el visor
+  var zoom = 1;            // multiplicador sobre "ajustar al ancho"
+  var ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+
+  function setZoom(z){
+    zoom = z;
+    zoomLabel.textContent = Math.round(z * 100) + "%";
+    zoomOutBtn.disabled = (z <= ZOOM_STEPS[0]);
+    zoomInBtn.disabled = (z >= ZOOM_STEPS[ZOOM_STEPS.length - 1]);
+  }
 
   function loadPdf(titulo, src, errMsg){
     viewerTitle.textContent = titulo;
@@ -1084,6 +1126,7 @@
     overlay.classList.add("open");
     document.body.style.overflow = "hidden";
 
+    setZoom(1);
     var seq = ++loadSeq;
     pdfjsLib.getDocument(src).promise.then(function(pdf){
       if(seq !== loadSeq){ pdf.destroy(); return; }
@@ -1100,14 +1143,14 @@
   }
 
   function openViewer(doc){
-    if(doc.native || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-      window.open(doc.file,'_blank'); return;
-    }
     loadPdf(doc.titulo, doc.file, "No se pudo cargar el documento. Verifica que el archivo esté en la carpeta docs/.");
   }
 
   function drawWatermark(){
-    var text = "CLAS AGREGADO LA QUERENCIA · USO INTERNO · NO REPRODUCIR";
+    // Con Cloudflare Access la marca identifica a quien visualiza: una captura queda trazable a su correo
+    var text = accessEmail
+      ? "CLAS AGREGADO LA QUERENCIA · " + accessEmail + " · " + new Date().toLocaleDateString("es-PE")
+      : "CLAS AGREGADO LA QUERENCIA · USO INTERNO · NO REPRODUCIR";
     ctx.save();
     ctx.globalAlpha = 0.10;
     ctx.fillStyle = "#8a3b32";
@@ -1133,14 +1176,17 @@
     pdf.getPage(num).then(function(page){
       if(pdf !== currentPdf){ renderTask = null; return; }
       var unscaled = page.getViewport({ scale: 1 });
-      var maxWidth = Math.min(viewerBody.clientWidth - 48, 1000);
+      var gutter = viewerBody.clientWidth < 600 ? 12 : 48;
+      var maxWidth = Math.min(viewerBody.clientWidth - gutter, 1000);
       var dpr = window.devicePixelRatio || 1;
-      var scale = Math.min(maxWidth / unscaled.width, 2.5) * dpr;
+      // zoom 1 = ajustar al ancho; el lienzo se limita a ~16 MP para no agotar la memoria del celular
+      var cssScale = Math.min(maxWidth / unscaled.width, 2.5) * zoom;
+      var scale = Math.min(cssScale * dpr, Math.sqrt(16e6 / (unscaled.width * unscaled.height)));
       var viewport = page.getViewport({ scale: scale });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      canvas.style.width = (viewport.width / dpr) + 'px';
-      canvas.style.height = (viewport.height / dpr) + 'px';
+      canvas.style.width = (unscaled.width * cssScale) + 'px';
+      canvas.style.height = (unscaled.height * cssScale) + 'px';
       renderTask = page.render({ canvasContext: ctx, viewport: viewport });
       return renderTask.promise.then(function(){
         drawWatermark();
@@ -1160,6 +1206,31 @@
     });
   }
 
+  zoomInBtn.addEventListener("click", function(){
+    var next = ZOOM_STEPS.filter(function(z){ return z > zoom; })[0];
+    if(currentPdf && next){ setZoom(next); renderPage(currentPage); }
+  });
+  zoomOutBtn.addEventListener("click", function(){
+    var prev = ZOOM_STEPS.filter(function(z){ return z < zoom; }).pop();
+    if(currentPdf && prev){ setZoom(prev); renderPage(currentPage); }
+  });
+
+  // Deslizar a izquierda/derecha en pantallas táctiles para cambiar de página (solo sin zoom, para no interferir con el desplazamiento)
+  var touchX = null, touchY = null;
+  viewerBody.addEventListener("touchstart", function(e){
+    if(e.touches.length !== 1){ touchX = null; return; }
+    touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
+  }, { passive:true });
+  viewerBody.addEventListener("touchend", function(e){
+    if(touchX === null || zoom > 1) return;
+    var dx = e.changedTouches[0].clientX - touchX;
+    var dy = e.changedTouches[0].clientY - touchY;
+    touchX = null;
+    if(Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    if(dx < 0 && !nextBtn.disabled) nextBtn.click();
+    if(dx > 0 && !prevBtn.disabled) prevBtn.click();
+  }, { passive:true });
+
   prevBtn.addEventListener("click", function(){
     if(currentPdf && currentPage > 1){ currentPage--; renderPage(currentPage); }
   });
@@ -1168,12 +1239,6 @@
   });
 
   function openViewerLocal(doc){
-    if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-      var blob = new Blob([doc._data],{type:"application/pdf"});
-      var url = URL.createObjectURL(blob);
-      window.open(url,"_blank");
-      return;
-    }
     loadPdf(doc.titulo, {data: new Uint8Array(doc._data)}, "No se pudo cargar el documento local.");
   }
 
@@ -1201,6 +1266,8 @@
     if(e.key === "Escape") closeViewer();
     if(e.key === "ArrowRight" && !nextBtn.disabled) nextBtn.click();
     if(e.key === "ArrowLeft" && !prevBtn.disabled) prevBtn.click();
+    if((e.key === "+" || e.key === "=") && !zoomInBtn.disabled) zoomInBtn.click();
+    if(e.key === "-" && !zoomOutBtn.disabled) zoomOutBtn.click();
   });
 
   /* ---- Protecciones del lado del navegador (disuasorias, no infalibles) ---- */
@@ -1222,12 +1289,23 @@
     el.textContent = currentYear;
   });
 
-  /* ---- Restaurar sesión si ya estaba desbloqueada ---- */
+  if(ADMIN_MODE){ document.getElementById("adminNote").style.display = ""; }
+
+  /* ---- Arranque: Cloudflare Access si está activo; si no, pantalla de clave ---- */
   initImportDB(function(){
     initCloudDocs(function(){
-      try{
-        if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
-      }catch(e){}
+      checkAccessIdentity(function(email){
+        document.body.classList.remove("checking");
+        if(email){
+          accessEmail = email;
+          document.getElementById("userEmail").textContent = email;
+          showPortal();
+          return;
+        }
+        try{
+          if(sessionStorage.getItem(SESSION_KEY) === "1"){ showPortal(); }
+        }catch(e){}
+      });
     });
   });
 

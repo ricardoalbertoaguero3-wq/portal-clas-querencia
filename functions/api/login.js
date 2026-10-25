@@ -21,10 +21,13 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: false, error: 'clave' }, 401);
   }
 
-  // Registro de ingresos: se consulta en el panel de Cloudflare (KV → claves "log:"), se conserva 90 días
-  await env.AUTH_KV.put(`log:${new Date().toISOString()}:${email}`,
-    JSON.stringify({ ip: clientIp(request), agente: request.headers.get('User-Agent') || '' }),
-    { expirationTtl: 90 * 86400 });
+  // Registro de ingresos (se ve en el panel de administración; se conserva 90 días).
+  // La clave invierte la hora para que KV liste primero los ingresos más recientes.
+  const ts = Date.now();
+  await env.AUTH_KV.put(`acc:${String(9999999999999 - ts).padStart(13, '0')}:${email}`, '', {
+    expirationTtl: 90 * 86400,
+    metadata: { fecha: new Date(ts).toISOString(), correo: email, ip: clientIp(request) },
+  });
 
   return json({ ok: true, email }, 200, [await createCookie('session', email, env), clearCookie('pre')]);
 }

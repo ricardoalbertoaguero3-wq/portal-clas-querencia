@@ -21,11 +21,11 @@ no permite ingresar.
 ├── index.html          ← el portal completo (HTML + CSS + JS, un solo archivo)
 ├── functions/           ← funciones del servidor (Cloudflare Pages Functions)
 │   ├── _middleware.js   ← exige sesión para todo salvo la portada, el logo y la API de ingreso
-│   └── api/             ← session, request-code, verify-code, login, logout
+│   └── api/             ← ingreso (session, request-code, verify-code, login, logout),
+│                          catálogo, archivos subidos (file/) y administración (admin/)
 ├── lib/auth.js          ← lista autorizada, códigos, límites de intentos y sesiones firmadas
+├── lib/catalog.js       ← catálogo de documentos (inicial y edición desde el panel)
 ├── apps-script/Code.gs  ← script de Google que envía los códigos por correo
-├── worker/index.js      ← API opcional en Cloudflare Worker + R2 (aún no desplegada)
-├── wrangler.toml        ← configuración del Worker
 ├── _headers             ← cabeceras HTTP para Cloudflare Pages (GitHub Pages lo ignora)
 └── docs/                ← los PDF que se muestran en el portal
     ├── logo.png
@@ -70,41 +70,46 @@ no permite ingresar.
   hacer una captura de pantalla — por eso se complementan con la marca de
   agua y el aviso legal.
 
-## Cómo agregar o reemplazar un documento
+## Administración de documentos (desde el portal)
 
-1. Sube el PDF nuevo a la carpeta `docs/` (nombre de archivo sin espacios,
-   por ejemplo `informe-situacion-institucional-2026.pdf`).
-2. Abre `index.html`, busca el bloque `DATA.categorias` (dentro de la
-   etiqueta `<script>`, cerca del final del archivo).
-3. Agrega o edita la entrada correspondiente:
-   ```js
-   { titulo:"Nombre del documento", descripcion:"Breve descripción.",
-     periodo:"2026", file:"docs/nombre-del-archivo.pdf" }
-   ```
-   Si el documento aún no está disponible, usa `pending:true` en lugar de
-   `file:"..."` — aparecerá como "Pendiente de carga" y no será clickeable.
-4. Sube los cambios al repositorio (commit en la rama `main`). El sitio se
-   actualiza automáticamente en uno o dos minutos.
+Los correos incluidos en la variable `ADMIN_EMAILS` ven el botón
+**Administrar** en la cabecera del portal. Al pulsarlo aparece la barra de
+administración y, junto a cada sección y documento, los botones ✎ ↑ ↓ 🗑.
+Los cambios se publican al instante para todo el personal; no hace falta
+tocar GitHub ni el código.
 
-## Importación de documentos (solo administración)
+| Tarea | Cómo |
+|---|---|
+| Subir documentos | **⬆ Subir documentos** (o **+ Subir aquí** en una sección) → arrastrar uno o varios PDF → revisar título, período y sección de cada uno → **Publicar** |
+| Editar título, descripción o período | ✎ en el documento |
+| Mover a otra sección | ✎ en el documento → elegir otra **Sección** |
+| Ordenar | ↑ ↓ en el documento o en la sección |
+| Quitar un documento | 🗑 en el documento (pide confirmación) |
+| Crear, renombrar o eliminar secciones | **+ Nueva sección**; ✎ y 🗑 junto al nombre (solo se elimina una sección vacía) |
+| Lista de jefes de servicio | **Editar jefes de servicio** (una línea por servicio: `Servicio \| Nombre`) |
+| Ver quién ingresó | **Registro de ingresos** (últimos 200, se conservan 90 días) |
 
-El botón **"+ Importar"** de cada sección está oculto para el personal. Se
-muestra solo al abrir el portal con `?admin` al final de la dirección (por
-ejemplo `https://…/?admin`). Con `?admin` también aparece la nota para
-administración al pie de la página.
+Detalles:
+- **Archivos:** solo PDF, de hasta 25 MB cada uno. Si un PDF pesa más,
+  comprimirlo antes (por ejemplo con "Guardar como PDF reducido").
+- **Datos que se completan solos:** el título sale del nombre del archivo y
+  el período también, si el nombre trae mes y año (`rol_setiembre-2026.pdf`
+  → "Setiembre 2026"). Si no, se usa el mes actual. Ambos se pueden
+  corregir antes de publicar.
+- **Etiqueta "Nuevo":** los documentos subidos la llevan durante 15 días.
+- **Al quitar un documento:** un PDF subido desde el portal se borra de forma
+  permanente. Uno del repositorio (carpeta `docs/`) solo deja de listarse y
+  el archivo se conserva.
+- **Varios administradores a la vez:** si dos personas editan al mismo
+  tiempo, el portal avisa y recarga la lista para no pisar cambios.
+- **Dónde se guarda:** el catálogo y los PDF subidos quedan en Cloudflare KV
+  (`portal-clas-auth`), dentro del plan gratuito (1 GB de almacenamiento).
 
-- Mientras el Worker no esté desplegado (`WORKER_URL` vacío en `index.html`),
-  el archivo importado se guarda **solo en el navegador de quien lo importa**
-  (aparece con la etiqueta "local"); nadie más lo ve. Para publicarlo para
-  todos, seguir "Cómo agregar o reemplazar un documento".
-- Si se despliega el Worker, definir su secreto `UPLOAD_SECRET` (distinto de
-  `PORTAL_PASSWORD`). El portal lo pide la primera vez que se sube o borra un
-  documento en la nube y no lo guarda.
-
-## Cómo editar la lista de jefes y jefas de servicio
-
-Mismo archivo `index.html`, bloque `DATA.jefes`, un poco más abajo de
-`DATA.categorias`.
+### Alternativa manual (repositorio)
+Los documentos iniciales están en `docs/` y en el catálogo inicial de
+`lib/catalog.js`. Ese catálogo solo se usa mientras nadie haya hecho cambios
+desde el panel; después manda el catálogo guardado en KV. Por eso, para
+cualquier documento nuevo conviene usar el panel.
 
 ## Configuración (una sola vez)
 
@@ -156,6 +161,7 @@ En **portal-clas-querencia → Settings → Variables and Secrets**, en
 | Variable | Tipo | Valor |
 |---|---|---|
 | `ALLOWED_EMAILS` | Texto | correos autorizados separados por comas, p. ej. `persona1@gmail.com, persona2@gmail.com` |
+| `ADMIN_EMAILS` | Texto | correos que pueden administrar documentos (deben estar también en `ALLOWED_EMAILS`) |
 | `PORTAL_PASSWORD` | **Secreto** | la clave institucional (nueva; la anterior estuvo publicada en el código) |
 | `SESSION_SECRET` | **Secreto** | el secreto de sesión |
 | `MAIL_WEBHOOK_URL` | Texto | la URL `/exec` del paso 1.5 |
@@ -184,9 +190,8 @@ repositorio privado.
   acción, aunque tenga la sesión abierta.
 - **Cambio de clave:** cambiar `PORTAL_PASSWORD` y hacer *Retry
   deployment*. Todas las sesiones se cierran.
-- **Registro de ingresos:** Workers KV → `portal-clas-auth` → claves que
-  empiezan con `log:` (fecha, hora y correo de cada ingreso; se conservan
-  90 días).
+- **Registro de ingresos:** en el portal, **Administrar → Registro de
+  ingresos** (fecha, hora y correo de cada ingreso; se conservan 90 días).
 - **Límite de envío:** Gmail permite unos 100 correos al día desde Apps
   Script. Cada ingreso usa uno (la sesión dura 8 horas).
 
